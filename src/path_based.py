@@ -250,4 +250,4 @@ if __name__ == "__main__":
     }
     pm = PerformanceModel(arch_arg, task_arg)
     T = pm.CommLatency()
-    print(T)
+    print(np.max(T))
