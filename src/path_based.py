@@ -6,7 +6,7 @@ DIR2PORT = {(0, -1): "north", (0, 1): "south", (-1, 0): "west", (1, 0): "east"}
 PINF = 1e10
 
 
-class NoCModel:
+class NocLatencyEstimator:
     ''' Estimating average packet latency for a given mesh and communication workload
         Initialize class with two dicts, arch_config and task_config:
             arch_config:
@@ -19,7 +19,7 @@ class NoCModel:
     '''
     arch_arg = {}
     task_arg = {}
-    cache = {}
+    cache = {}          # pkt_path: [(router, ic, oc)]
 
     def __init__(self, arch_config, task_config):
         # Default configuration for on-chip networks
@@ -48,7 +48,7 @@ class NoCModel:
         if self.arch_arg["n"] != self.arch_arg["d"]**2:
             raise Exception("Invalid hardware configuration: d = {}, n = {}".format(self.arch_arg["d"], self.arch_arg["n"]))
 
-    def CommLatency(self):
+    def Latency(self):
         '''Analyzing latency of each transmission request assigned by task_config
             Return:
                 Time: A list of estimated transmission latency of requests expressed by task_arg["G_R"],
@@ -56,7 +56,7 @@ class NoCModel:
         '''
 
         # Preprocess the task graph and set up three key tensors: S, S2, W
-        self.__Preprocess()
+        self.__preprocess()
         n, p = self.arch_arg["n"], self.arch_arg["p"]
         S = np.zeros((n, p)) + 1e-10    # for getting rid of dividing zeros
         S2 = np.zeros((n, p)) + 1e-10
@@ -83,7 +83,18 @@ class NoCModel:
         Time = self.__analyzePktTime()
         return Time
 
-    def __Preprocess(self):
+    def getRoutedPath(self):
+        '''Return routed paths of all requests in task graph handled by assigned routing strategy
+        Routing strategy is set as XY routing by default.
+            Return:
+                pkt_path: A list with factors corresponding with requests in the task graph, whose format as
+                (passed routers, passed input channels, passed output channels). Noted that both input and
+                output channels are in view of routers, i.e. they're serial numbers of routers' ports.
+                You could use zip(*) to get those three path seperately.
+        '''
+        return self.__routeTaskGraph()
+
+    def __preprocess(self):
         '''Preprocess the task graph and extract its features
         Step 1 & 2 in the article: Calculating P(s->d), L, cv_A, P_p2p, L_p2p, L_p, RH
             Return:
@@ -109,14 +120,11 @@ class NoCModel:
         L_p2p = np.zeros((n, p, p))
         L = np.zeros(n)
         RH = np.tile(PINF, (n, p)).astype(np.int)
-        pkt_path = []
+        pkt_path = self.__routeTaskGraph()
 
-        for request, proportion in zip(G, P_s2d):
-            Router_path = self.__RouterPath(request[0], request[1])
-            Iport_path, Oport_path = self.__PortPath(Router_path)
+        for request, Path, proportion in zip(G, pkt_path, P_s2d):
+            Router_path, Iport_path, Oport_path = zip(*Path)
             vol = request[2]
-            d = self.arch_arg["d"]
-            Router_path = [cord[1] * d + cord[0] for cord in Router_path]       # 2D left-half system
             L_p2p[Router_path, Iport_path, Oport_path] += vol * proportion
             L[request[0]] += vol * proportion
             Residual_hops = np.asarray([i for i in range(len(Oport_path) - 1, -1, -1)])
@@ -124,7 +132,7 @@ class NoCModel:
             pkt_path.append(list(zip(Router_path, Iport_path, Oport_path)))
 
         # Calculate P_p2p
-        L_p2p_t = np.transpose(L_p2p, (1, 0, 2))            # TODO: Transpose should be replaced to optimize the performance
+        L_p2p_t = np.transpose(L_p2p, (1, 0, 2))    # TODO: Transpose should be replaced to optimize the performance
         L_p = np.sum(L_p2p_t, axis=0)
         P_p2p_t = L_p2p_t / (L_p + 1e-10)
         P_p2p = np.transpose(P_p2p_t, (1, 0, 2))
@@ -132,7 +140,6 @@ class NoCModel:
         # Store them
         c = self.cache
         c["P_s2d"], c["L"], c["L_p"], c["P_p2p"], c["L_p2p"], c["RH"] = P_s2d, L, L_p, P_p2p, L_p2p, RH
-        c["pkt_path"] = pkt_path
 
     def __updateOCServiceTime(self, rh):
         '''Update s_i^M and s_i^M^2
@@ -223,6 +230,43 @@ class NoCModel:
             Time.append(time)
         return Time
 
+    def __routeTaskGraph(self):
+        if "pkt_path" in self.cache:
+            return self.cache["pkt_path"]
+        ret = []
+        for rqst in self.task_arg["G_R"]:
+            Router_path = self.__passedRouters(rqst[0], rqst[1])
+            Iport_path, Oport_path = self.__passedIOChannels(Router_path)
+            Router_path = [cord[1] * self.arch_arg["d"] + cord[0] for cord in Router_path]
+            ret.append(list(zip(Router_path, Iport_path, Oport_path)))
+        self.cache["pkt_path"] = ret
+        return ret
+
+    def __passedRouters(self, src_rt, dst_rt):
+        d = self.arch_arg["d"]
+        src_x, src_y = int(src_rt % d), int(src_rt // d)      # The 2D coordinate is left-half system
+        dst_x, dst_y = int(dst_rt % d), int(dst_rt // d)
+        # X routing
+        step_x = 1 if src_x < dst_x else -1
+        Router_path = [(x, src_y) for x in range(src_x, dst_x, step_x)]
+        # Y routing
+        step_y = 1 if src_y < dst_y else -1
+        Router_path += [(dst_x, y) for y in range(src_y, dst_y, step_y)]
+        Router_path += [(dst_x, dst_y)]    # the destination router
+        Router_path = list(map(lambda x: (int(x[0]), int(x[1])), Router_path))
+        return Router_path
+
+    def __passedIOChannels(self, path):
+        Iport_path = [PORT2IDX["input"]]
+        Oport_path = []
+        for prev, pres in zip(path[:-1], path[1:]):
+            op_ = (pres[0] - prev[0], pres[1] - prev[1])
+            ip_ = (prev[0] - pres[0], prev[1] - pres[1])
+            Iport_path.append(PORT2IDX[DIR2PORT[ip_]])
+            Oport_path.append(PORT2IDX[DIR2PORT[op_]])
+        Oport_path.append(PORT2IDX["output"])
+        return Iport_path, Oport_path
+
     def __pointTo(self, src, oc):
         d = self.arch_arg["d"]
         if oc == PORT2IDX["west"]:
@@ -243,31 +287,6 @@ class NoCModel:
             raise Exception("Router exceeded the boundary: router = {}, oc = {}".format(src, oc))
         return ret, ic
 
-    def __RouterPath(self, src_rt, dst_rt):
-        d = self.arch_arg["d"]
-        src_x, src_y = int(src_rt % d), int(src_rt // d)      # The 2D coordinate is left-half system
-        dst_x, dst_y = int(dst_rt % d), int(dst_rt // d)
-        # X routing
-        step_x = 1 if src_x < dst_x else -1
-        Router_path = [(x, src_y) for x in range(src_x, dst_x, step_x)]
-        # Y routing
-        step_y = 1 if src_y < dst_y else -1
-        Router_path += [(dst_x, y) for y in range(src_y, dst_y, step_y)]
-        Router_path += [(dst_x, dst_y)]    # the destination router
-        Router_path = list(map(lambda x: (int(x[0]), int(x[1])), Router_path))
-        return Router_path
-
-    def __PortPath(self, path):
-        Iport_path = [PORT2IDX["input"]]
-        Oport_path = []
-        for prev, pres in zip(path[:-1], path[1:]):
-            op_ = (pres[0] - prev[0], pres[1] - prev[1])
-            ip_ = (prev[0] - pres[0], prev[1] - pres[1])
-            Iport_path.append(PORT2IDX[DIR2PORT[ip_]])
-            Oport_path.append(PORT2IDX[DIR2PORT[op_]])
-        Oport_path.append(PORT2IDX["output"])
-        return Iport_path, Oport_path
-
 
 if __name__ == "__main__":
     arch_arg = {
@@ -277,6 +296,6 @@ if __name__ == "__main__":
     task_arg = {
         "G_R": [(0, 3, 0.1), (0, 1, 0.05), (1, 2, 0.07), (2, 3, 0.1)]
     }
-    pm = NoCModel(arch_arg, task_arg)
-    T = pm.CommLatency()
+    pm = NocLatencyEstimator(arch_arg, task_arg)
+    T = pm.Latency()
     print(np.max(T))
