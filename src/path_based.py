@@ -6,10 +6,10 @@ DIR2PORT = {(0, -1): "north", (0, 1): "south", (-1, 0): "west", (1, 0): "east"}
 PINF = 1e10
 
 
-class PerformanceModel:
+class NoCModel:
     ''' Estimating average packet latency for a given mesh and communication workload
         Initialize class with two dicts, arch_config and task_config:
-            arch_config: 
+            arch_config:
                 d: Diameter of the mesh
                 n: d**2, # of routers
             task_config:
@@ -19,8 +19,7 @@ class PerformanceModel:
     '''
     arch_arg = {}
     task_arg = {}
-    L = np.zeros(1)
-    RH = np.zeros(1)
+    cache = {}
 
     def __init__(self, arch_config, task_config):
         # Default configuration for on-chip networks
@@ -39,13 +38,13 @@ class PerformanceModel:
         self.task_arg["G_R"] = []        # task graph: (src, dst, rate)
         self.task_arg["cv_A"] = 1.00     # average coefficiency of packet size
         self.task_arg["l"] = 16          # average packet size (flits)
-        self.task_arg["pkt_path"] = []   # routed path: [(router, input port, output port)]
 
+        # Initialation
         for arg in arch_config:
             self.arch_arg[arg] = arch_config[arg]
         for arg in task_config:
             self.task_arg[arg] = task_config[arg]
-        
+
         if self.arch_arg["n"] != self.arch_arg["d"]**2:
             raise Exception("Invalid hardware configuration: d = {}, n = {}".format(self.arch_arg["d"], self.arch_arg["n"]))
 
@@ -55,27 +54,33 @@ class PerformanceModel:
                 Time: A list of estimated transmission latency of requests expressed by task_arg["G_R"],
                     noted that the two lists are with the same order to indicate the correspondence.
         '''
+
+        # Preprocess the task graph and set up three key tensors: S, S2, W
+        self.__Preprocess()
         n, p = self.arch_arg["n"], self.arch_arg["p"]
-        P_s2d, L, L_p, P_p2p, L_p2p, RH = self.__Preprocess()
-        self.RH = RH
-        S = np.zeros((n, p)) + 1e-10
+        S = np.zeros((n, p)) + 1e-10    # for getting rid of dividing zeros
         S2 = np.zeros((n, p)) + 1e-10
-        W = np.zeros((n, p, p))
+        W = np.zeros((n, p, p)) + 1e-10
+        # Store them
+        self.cache["S"], self.cache["S2"], self.cache["W"] = S, S2, W
 
         # Initialize S and S2
-        ts, tw, l_ = self.arch_arg["ts"], self.arch_arg["tw"], self.task_arg["l"]
+        ts, tw = self.arch_arg["ts"], self.arch_arg["tw"]
+        l_, cv_A = self.task_arg["l"], self.task_arg["cv_A"]
+        RH = self.cache["RH"]
         lb = (l_ - 1) * max(ts, tw)
         S[RH == 0] = ts + tw + lb
-        cv_A = self.task_arg["cv_A"]
         S2[RH == 0] = (ts + tw + lb)**2 / (cv_A**2 + 1)
+
         # Initialize W
-        W = self.__updateRouterBlockingTime(W, S, S2, L_p, L_p2p, RH, 0)
+        W = self.__updateRouterBlockingTime(0)
+
         # Calculate blocking time of each router
         max_rh = np.max(RH[RH != PINF])
         for rh in range(1, max_rh + 1):
-            S, S2 = self.__updateOCServiceTime(S, S2, W, P_p2p, RH, rh)
-            W = self.__updateRouterBlockingTime(W, S, S2, L_p, L_p2p, RH, rh)
-        Time = self.__analyzePktTime(W)
+            self.__updateOCServiceTime(rh)
+            self.__updateRouterBlockingTime(rh)
+        Time = self.__analyzePktTime()
         return Time
 
     def __Preprocess(self):
@@ -94,37 +99,43 @@ class PerformanceModel:
                     passing router i output channel j
         '''
 
+        # Set up P_s2d
         G = self.task_arg["G_R"]
         Vol = np.asarray([x[2] for x in G])
-        # cv_A = self.task_arg["cv_A"]                # cv_A 是单个流packet长度的avg coefficient of variation
         P_s2d = list(Vol / np.sum(Vol))
 
-        n = self.arch_arg["n"]
-        p = self.arch_arg["p"]
+        # Set up L_p2p, L, RH, pkt_path
+        n, p = self.arch_arg["n"], self.arch_arg["p"]
         L_p2p = np.zeros((n, p, p))
         L = np.zeros(n)
         RH = np.tile(PINF, (n, p)).astype(np.int)
+        pkt_path = []
 
         for request, proportion in zip(G, P_s2d):
             Router_path = self.__RouterPath(request[0], request[1])
             Iport_path, Oport_path = self.__PortPath(Router_path)
             vol = request[2]
             d = self.arch_arg["d"]
-            Router_path = [cord[1] * d + cord[0] for cord in Router_path]       # (x, y) x为横坐标，y为纵坐标
+            Router_path = [cord[1] * d + cord[0] for cord in Router_path]       # 2D left-half system
             L_p2p[Router_path, Iport_path, Oport_path] += vol * proportion
             L[request[0]] += vol * proportion
             Residual_hops = np.asarray([i for i in range(len(Oport_path) - 1, -1, -1)])
             RH[Router_path, Oport_path] = np.minimum(RH[Router_path, Oport_path], Residual_hops)
-            self.task_arg["pkt_path"].append(list(zip(Router_path, Iport_path, Oport_path)))
+            pkt_path.append(list(zip(Router_path, Iport_path, Oport_path)))
 
-        L_p2p_t = np.transpose(L_p2p, (1, 0, 2))            # TODO: transpose效率太低了，需要优化
+        # Calculate P_p2p
+        L_p2p_t = np.transpose(L_p2p, (1, 0, 2))            # TODO: Transpose should be replaced to optimize the performance
         L_p = np.sum(L_p2p_t, axis=0)
         P_p2p_t = L_p2p_t / (L_p + 1e-10)
         P_p2p = np.transpose(P_p2p_t, (1, 0, 2))
-        return P_s2d, L, L_p, P_p2p, L_p2p, RH
 
-    def __updateOCServiceTime(self, S, S2, W, P_p2p, RH, rh):
-        '''Calculate s_i^M and s_i^M^2 with rh residual hops
+        # Store them
+        c = self.cache
+        c["P_s2d"], c["L"], c["L_p"], c["P_p2p"], c["L_p2p"], c["RH"] = P_s2d, L, L_p, P_p2p, L_p2p, RH
+        c["pkt_path"] = pkt_path
+
+    def __updateOCServiceTime(self, rh):
+        '''Update s_i^M and s_i^M^2
         Formula 16
             S: A (n, p) ndarray, where S[i, j] dentoes the first moment of
                 service time of output channel j of router i
@@ -139,17 +150,15 @@ class PerformanceModel:
             rh: The present residual hop (step) we are working on
         '''
         assert rh > 0
-        ts = self.arch_arg["ts"]
-        tr = self.arch_arg["tr"]
-        tw = self.arch_arg["tw"]
-        cp_if = self.arch_arg["cp_if"]
-        cp_of = self.arch_arg["cp_of"]
-        n = self.arch_arg["n"]
-        p = self.arch_arg["p"]
+        ts, tr, tw = self.arch_arg["ts"], self.arch_arg["tr"], self.arch_arg["tw"]
+        cp_if, cp_of = self.arch_arg["cp_if"], self.arch_arg["cp_of"]
+        n, p = self.arch_arg["n"], self.arch_arg["p"]
+        S, S2, W = self.cache["S"], self.cache["S2"], self.cache["W"]
+        P_p2p, RH = self.cache["P_p2p"], self.cache["RH"]
 
         Upd_s = np.zeros((n, p))
         Upd_s2 = np.zeros((n, p))
-        R, C = np.where(RH == rh)     # 需要在这个step做的channel
+        R, C = np.where(RH == rh)
         for r, c in zip(R, C):
             dst_r, dst_ic = self.__pointTo(r, c)
             for dst_oc in range(6):
@@ -162,25 +171,27 @@ class PerformanceModel:
                 Upd_s2[r, c] += P_p2p[dst_r, dst_ic, dst_oc] * latency**2
         S += Upd_s
         S2 += Upd_s2
-        return S, S2
 
-    def __updateRouterBlockingTime(self, W, S, S2, L_p, L_p2p, RH, rh):
-        '''Calculate blocking time spent on routers
+    def __updateRouterBlockingTime(self, rh):
+        '''Update W
         Formula 13
             W: A (n, p, p) ndarray, where W[i, j, k] denotes bloking time spent on queuing from
                 input channel j to output channel k in router i
-            S: A (n, p) ndarray, where S[i, j] dentoes the first moment of service time of 
+            S: A (n, p) ndarray, where S[i, j] dentoes the first moment of service time of
                 output channel j of router i
-            S2: A (n, p) ndarray, where S[i, j] dentoes the second moment of service time of 
+            S2: A (n, p) ndarray, where S[i, j] dentoes the second moment of service time of
                 output channel j of router i
-            L_p: A (n, p) ndarray, where Lp[i, j] denotes packet arrival rate to the 
-                output channel j of router i
-            L_p2p: A (n, p, p) ndarray, where L_p2p[i, j, k] denotes trasmission rate from 
+            L_p: A (n, p) ndarray, where Lp[i, j] denotes packet arrival rate to the
+                output channel j of router
+            L_p2p: A (n, p, p) ndarray, where L_p2p[i, j, k] denotes trasmission rate from
                 channel j to channel k in router i
             RH: A (n, p) ndarray, where RH[i, j] indicates the longest residual hops of packets
                 passing router i output channel j
             rh: The present residual hop (step) we are working on
         '''
+        S, S2, W = self.cache["S"], self.cache["S2"], self.cache["W"]
+        L_p, L_p2p, RH = self.cache["L_p"], self.cache["L_p2p"], self.cache["RH"]
+
         lr, lc = np.where(RH == rh)
         for r, oc in zip(lr, lc):
             p = self.arch_arg["p"]
@@ -195,14 +206,14 @@ class PerformanceModel:
             L = arrival_rate * (ca2 + cs2) / L
             L[0] = L[0] / Service_rate              # input channel
             W[r, :, oc] = L
+        
         if np.nan in W:
             raise Exception("NAN in W: rh = {}".format(rh))
-        return W
 
-    def __analyzePktTime(self, W):
-        Path = self.task_arg["pkt_path"]
-        ts, tw, tr = self.arch_arg["ts"], self.arch_arg["tw"], self.arch_arg["tr"]
+    def __analyzePktTime(self):
         l_ = self.task_arg["l"]
+        ts, tw, tr = self.arch_arg["ts"], self.arch_arg["tw"], self.arch_arg["tr"]
+        W, Path = self.cache["W"], self.cache["pkt_path"]
         lb = max(ts, tw) * (l_ - 1)
         Time = []
         for path in Path:
@@ -234,7 +245,7 @@ class PerformanceModel:
 
     def __RouterPath(self, src_rt, dst_rt):
         d = self.arch_arg["d"]
-        src_x, src_y = int(src_rt % d), int(src_rt // d)      # x为横坐标，y为纵坐标，左上为(0， 0)
+        src_x, src_y = int(src_rt % d), int(src_rt // d)      # The 2D coordinate is left-half system
         dst_x, dst_y = int(dst_rt % d), int(dst_rt // d)
         # X routing
         step_x = 1 if src_x < dst_x else -1
@@ -257,6 +268,7 @@ class PerformanceModel:
         Oport_path.append(PORT2IDX["output"])
         return Iport_path, Oport_path
 
+
 if __name__ == "__main__":
     arch_arg = {
         "d": 2,
@@ -265,6 +277,6 @@ if __name__ == "__main__":
     task_arg = {
         "G_R": [(0, 3, 0.1), (0, 1, 0.05), (1, 2, 0.07), (2, 3, 0.1)]
     }
-    pm = PerformanceModel(arch_arg, task_arg)
+    pm = NoCModel(arch_arg, task_arg)
     T = pm.CommLatency()
     print(np.max(T))
