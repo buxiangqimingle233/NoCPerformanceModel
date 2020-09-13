@@ -114,6 +114,7 @@ class NocLatencyEstimator:
         G = self.task_arg["G_R"]
         Vol = np.asarray([x[2] for x in G])
         P_s2d = list(Vol / np.sum(Vol))
+        P_s2d = [1 for i in G]
 
         # Set up L_p2p, L, RH, pkt_path
         n, p = self.arch_arg["n"], self.arch_arg["p"]
@@ -127,9 +128,8 @@ class NocLatencyEstimator:
             vol = request[2]
             L_p2p[Router_path, Iport_path, Oport_path] += vol * proportion
             L[request[0]] += vol * proportion
-            Residual_hops = np.asarray([i for i in range(len(Oport_path) - 1, -1, -1)])
+            Residual_hops = np.asarray([i for i in range(len(Oport_path)-1, -1, -1)])
             RH[Router_path, Oport_path] = np.minimum(RH[Router_path, Oport_path], Residual_hops)
-            pkt_path.append(list(zip(Router_path, Iport_path, Oport_path)))
 
         # Calculate P_p2p
         L_p2p_t = np.transpose(L_p2p, (1, 0, 2))    # TODO: Transpose should be replaced to optimize the performance
@@ -256,7 +256,7 @@ class NocLatencyEstimator:
         Router_path = list(map(lambda x: (int(x[0]), int(x[1])), Router_path))
         return Router_path
 
-    def __passedIOChannels(self, path):
+    def __passedIOChannels(self, path):0
         Iport_path = [PORT2IDX["input"]]
         Oport_path = []
         for prev, pres in zip(path[:-1], path[1:]):
