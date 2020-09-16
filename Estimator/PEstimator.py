@@ -1,11 +1,10 @@
+import AddPath
 import copy
+import numpy as np
 from collections import Counter
 from VirEstimator import VirEstimator
-import numpy as np
+from Util import XYRouting as RS
 
-
-PORT2IDX = {"input": 0, "output": 1, "north": 2, "south": 3, "west": 4, "east": 5}
-DIR2PORT = {(0, -1): "north", (0, 1): "south", (-1, 0): "west", (1, 0): "east"}
 PINF = 1e5
 
 
@@ -55,6 +54,9 @@ class PEstimator(VirEstimator):
         '''
         self.setTask(task_arg)
         self.setArch(arch_arg)
+
+        # set routing strategy
+        self.rter = RS.XYRouting(self.arch_arg)
 
         # Preprocess the task graph and set up three key tensors: S, S2, W
         self.__preprocess()
@@ -147,7 +149,7 @@ class PEstimator(VirEstimator):
         L_p2p = np.zeros((n, p, p))
         L = np.zeros(n)
         RH = np.tile(PINF, (n, p)).astype(np.int)
-        pkt_path = self.__routeTaskGraph()
+        pkt_path = self.rter.route(G)
 
         for request, Path, proportion in zip(G, pkt_path, P_s2d):
             Router_path, Iport_path, Oport_path = zip(*Path)
@@ -166,6 +168,7 @@ class PEstimator(VirEstimator):
         # Store them
         c = self.cache
         c["P_s2d"], c["L"], c["L_p"], c["P_p2p"], c["L_p2p"], c["RH"] = P_s2d, L, L_p, P_p2p, L_p2p, RH
+        c["pkt_path"] = pkt_path
 
     def __updateOCServiceTime(self, rh):
         '''Update s_i^M and s_i^M^2
@@ -193,7 +196,7 @@ class PEstimator(VirEstimator):
         Upd_s2 = np.zeros((n, p))
         R, C = np.where(RH == rh)
         for r, c in zip(R, C):
-            dst_r, dst_ic = self.__pointTo(r, c)
+            dst_r, dst_ic = self.rter.pointTo(r, c)
             for dst_oc in range(6):
                 latency = ts + tr + tw
                 latency += W[dst_r, dst_ic, dst_oc]
@@ -256,66 +259,11 @@ class PEstimator(VirEstimator):
             Time.append(time)
         return Time
 
-    def __routeTaskGraph(self):
-        if "pkt_path" in self.cache:
-            return self.cache["pkt_path"]
-        ret = []
-        for rqst in self.task_arg["G_R"]:
-            Router_path = self.__passedRouters(rqst[0], rqst[1])
-            Iport_path, Oport_path = self.__passedIOChannels(Router_path)
-            Router_path = [cord[1] * self.arch_arg["d"] + cord[0] for cord in Router_path]
-            ret.append(list(zip(Router_path, Iport_path, Oport_path)))
-        self.cache["pkt_path"] = ret
-        return ret
-
-    def __passedRouters(self, src_rt, dst_rt):
-        d = self.arch_arg["d"]
-        src_x, src_y = int(src_rt % d), int(src_rt // d)      # The 2D coordinate is left-half system
-        dst_x, dst_y = int(dst_rt % d), int(dst_rt // d)
-        # X routing
-        step_x = 1 if src_x < dst_x else -1
-        Router_path = [(x, src_y) for x in range(src_x, dst_x, step_x)]
-        # Y routing
-        step_y = 1 if src_y < dst_y else -1
-        Router_path += [(dst_x, y) for y in range(src_y, dst_y, step_y)]
-        Router_path += [(dst_x, dst_y)]    # the destination router
-        Router_path = list(map(lambda x: (int(x[0]), int(x[1])), Router_path))
-        return Router_path
-
-    def __passedIOChannels(self, path):
-        Iport_path = [PORT2IDX["input"]]
-        Oport_path = []
-        for prev, pres in zip(path[:-1], path[1:]):
-            op_ = (pres[0] - prev[0], pres[1] - prev[1])
-            ip_ = (prev[0] - pres[0], prev[1] - pres[1])
-            Iport_path.append(PORT2IDX[DIR2PORT[ip_]])
-            Oport_path.append(PORT2IDX[DIR2PORT[op_]])
-        Oport_path.append(PORT2IDX["output"])
-        return Iport_path, Oport_path
-
-    def __pointTo(self, src, oc):
-        d = self.arch_arg["d"]
-        if oc == PORT2IDX["west"]:
-            ret = src - 1
-            ic = PORT2IDX["east"]
-        elif oc == PORT2IDX["east"]:
-            ret = src + 1
-            ic = PORT2IDX["west"]
-        elif oc == PORT2IDX["north"]:
-            ret = src - d
-            ic = PORT2IDX["south"]
-        elif oc == PORT2IDX["south"]:
-            ret = src + d
-            ic = PORT2IDX["north"]
-        else:
-            raise Exception("Invalid output port: router = {}, oc = {}".format(src, oc))
-        if src < 0 and src >= d:
-            raise Exception("Router exceeded the boundary: router = {}, oc = {}".format(src, oc))
-        return ret, ic
-
 
 if __name__ == "__main__":
+
     task_arg = {
         "G_R": [(0, 3, 0.2), (0, 1, 0.2), (1, 2, 0.2), (2, 3, 1)]
     }
     pm = PEstimator()
+    print(pm.calLatency(task_arg, {}))
