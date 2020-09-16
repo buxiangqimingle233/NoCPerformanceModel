@@ -1,5 +1,6 @@
 import copy
 from collections import Counter
+from VirEstimator import VirEstimator
 import numpy as np
 
 
@@ -8,7 +9,7 @@ DIR2PORT = {(0, -1): "north", (0, 1): "south", (-1, 0): "west", (1, 0): "east"}
 PINF = 1e5
 
 
-class PEstimator:
+class PEstimator(VirEstimator):
     ''' Estimating average packet latency for a given mesh and communication workload
         Initialize class with two dicts, arch_config and task_config:
             arch_config:

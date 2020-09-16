@@ -15,7 +15,11 @@ os.chdir(root)
 
 class Driver():
 
-    def __init__(self, config_path):        # TODO: Setting default values
+    def __init__(self, config_name):        # TODO: Setting default values
+        '''
+            config_
+        '''
+        config_path = root + "/Configuration/" + config_name
         # read the configuration file
         if not os.path.exists(config_path):
             raise Exception("Invalid configuration path!")
@@ -72,7 +76,7 @@ if __name__ == "__main__":
     parser.add_argument("--d", help="Name for task graph (without the need of full path)   \
         e.g. sample.txt")   # TODO: 加 path
     args = parser.parse_args()
-    config_path = root + "/Configuration/" + args.c
-    driver = Driver(config_path)
+    driver = Driver(args.c)
     driver.execute()
-    os.chdir(org_cwd)
+
+os.chdir(org_cwd)

@@ -28,8 +28,6 @@ class SFCongManager(VirCongManager):
 
     def doInjection(self, task):
         self.setTask(task)
-        # if not hasattr(self, "task"):
-        #     raise Exception("Please set task for Congestion Manager first!")
         G = self.task["G"]
         G.sort(key=lambda x: x[-1])
         partition = self.__partition()

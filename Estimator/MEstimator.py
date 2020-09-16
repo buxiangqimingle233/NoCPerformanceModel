@@ -2,7 +2,7 @@ import numpy as np
 
 
 # FIXME: 这里的x指的是纵坐标，y指的是横坐标
-class MEstimator:
+class MEstimator(VirEstimator):
     '''
         Estimating average packet latency for a given mesh configuration
     '''
@@ -17,15 +17,15 @@ class MEstimator:
         self.noc_arg["router_service_time"] = 1   # Processing delay of routers
         self.noc_arg["R"] = 1                     # Residual Service time (当一个pkt到达时，当前正在处理的pkt的剩余时间)
 
-    def estPacketLatency(self, task_graph):
+    def calLatency(self, task_graph):
         '''
             Return:
         '''
-        L, LC = self.analyzeTaskGraph(task_graph)
-        queue_length = self.estInputQueueSize(L, LC)
+        L, LC = self.__analyzeTaskGraph(task_graph)
+        queue_length = self.__estInputQueueSize(L, LC)
         router_latency = queue_length / np.diag(LC)
 
-    def analyzeTaskGraph(self, task_graph):
+    def __analyzeTaskGraph(self, task_graph):
         '''
         Generate L & LC of a given traffic task with XY routing
             task_graph: An iterable object donoting traffic pattern with \
@@ -79,7 +79,7 @@ class MEstimator:
         L[diag_index, diag_index] = 0
         return L, LC
 
-    def estInputQueueSize(self, L, LC):
+    def __estInputQueueSize(self, L, LC):
         '''
         Estimate input queue length in each channel
             L: A P x P ndarray, L_ij denotes the rate routed from channel i to
