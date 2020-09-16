@@ -1,12 +1,14 @@
+import copy
+from collections import Counter
 import numpy as np
 
 
 PORT2IDX = {"input": 0, "output": 1, "north": 2, "south": 3, "west": 4, "east": 5}
 DIR2PORT = {(0, -1): "north", (0, 1): "south", (-1, 0): "west", (1, 0): "east"}
-PINF = 1e10
+PINF = 1e5
 
 
-class NocLatencyEstimator:
+class PEstimator:
     ''' Estimating average packet latency for a given mesh and communication workload
         Initialize class with two dicts, arch_config and task_config:
             arch_config:
@@ -19,41 +21,39 @@ class NocLatencyEstimator:
     '''
     arch_arg = {}
     task_arg = {}
-    cache = {}          # pkt_path: [(router, ic, oc)]
+    cache = {}
 
-    def __init__(self, arch_config, task_config):
+    def __init__(self):
         # Default configuration for on-chip networks
-        self.arch_arg["type"] = "mesh"
-        self.arch_arg["d"] = 16         # diameter
-        self.arch_arg["n"] = 16 * 16    # # of routers
-        self.arch_arg["p"] = 6          # # of channels per router (N, S, W, E, I, O)
-        self.arch_arg["tr"] = 2         # cycles for arbitration
-        self.arch_arg["ts"] = 1         # cycles for switching
-        self.arch_arg["tw"] = 1         # cycles for transmitting a flit between two adjacent routers
-        self.arch_arg["cp_if"] = 4      # capacity of input buffer (flits)
-        self.arch_arg["cp_of"] = 1      # capacity of output buffer (flits)
-        self.arch_arg["bw"] = 1         # bandwidth (flits)
+        self.dft_arch = {}
+        self.dft_arch["type"] = "mesh"
+        self.dft_arch["d"] = 8          # diameter
+        self.dft_arch["n"] = 8 * 8      # # of routers
+        self.dft_arch["p"] = 6          # # of channels per router (N, S, W, E, I, O)
+        self.dft_arch["tr"] = 2         # cycles for arbitration
+        self.dft_arch["ts"] = 1         # cycles for switching
+        self.dft_arch["tw"] = 1         # cycles for transmitting a flit between two adjacent routers
+        self.dft_arch["cp_if"] = 4      # capacity of input buffer (flits)
+        self.dft_arch["cp_of"] = 1      # capacity of output buffer (flits)
+        self.dft_arch["bw"] = 1         # bandwidth (flits)
+        self.dft_arch["w"] = 16         # width of channels(# bits per flit)
+        self.arch_arg = copy.deepcopy(self.dft_arch)
 
         # Default configuration for tasks
-        self.task_arg["G_R"] = []        # task graph: (src, dst, rate)
-        self.task_arg["cv_A"] = 1.00     # average coefficiency of packet size
-        self.task_arg["l"] = 16          # average packet size (flits)
+        self.dft_task = {}
+        self.dft_task["G_R"] = []        # task graph: (src, dst, rate)
+        self.dft_task["cv_A"] = 1.00     # average coefficiency of packet size
+        self.dft_task["l"] = 64          # average packet size (flits)
+        self.task_arg = copy.deepcopy(self.dft_task)
 
-        # Initialation
-        for arg in arch_config:
-            self.arch_arg[arg] = arch_config[arg]
-        for arg in task_config:
-            self.task_arg[arg] = task_config[arg]
-
-        if self.arch_arg["n"] != self.arch_arg["d"]**2:
-            raise Exception("Invalid hardware configuration: d = {}, n = {}".format(self.arch_arg["d"], self.arch_arg["n"]))
-
-    def Latency(self):
+    def calLatency(self, task_arg, arch_arg):
         '''Analyzing latency of each transmission request assigned by task_config
             Return:
                 Time: A list of estimated transmission latency of requests expressed by task_arg["G_R"],
                     noted that the two lists are with the same order to indicate the correspondence.
         '''
+        self.setTask(task_arg)
+        self.setArch(arch_arg)
 
         # Preprocess the task graph and set up three key tensors: S, S2, W
         self.__preprocess()
@@ -73,7 +73,7 @@ class NocLatencyEstimator:
         S2[RH == 0] = (ts + tw + lb)**2 / (cv_A**2 + 1)
 
         # Initialize W
-        W = self.__updateRouterBlockingTime(0)
+        self.__updateRouterBlockingTime(0)
 
         # Calculate blocking time of each router
         max_rh = np.max(RH[RH != PINF])
@@ -87,12 +87,33 @@ class NocLatencyEstimator:
         '''Return routed paths of all requests in task graph handled by assigned routing strategy
         Routing strategy is set as XY routing by default.
             Return:
-                pkt_path: A list with factors corresponding with requests in the task graph, whose format as
-                (passed routers, passed input channels, passed output channels). Noted that both input and
-                output channels are in view of routers, i.e. they're serial numbers of routers' ports.
+                A dict with tuples (src, dst) as keys and pkt_path as values
+                pkt_path: A list whose factors are tuples of (router, input channel, output channel)
+                Noted that both input and output channels are in view of routers, i.e. they're serial numbers of routers' ports.
                 You could use zip(*) to get those three path seperately.
         '''
-        return self.__routeTaskGraph()
+        if not hasattr(self, "task_arg"):
+            raise Exception("Please set task arguments for Estimator first!")
+        if not hasattr(self, "arch_arg"):
+            raise Exception("Please set architecture arguments for Estimator first!")
+        G = self.task_arg["G_R"]
+        P = self.__routeTaskGraph()
+        ret = {(r[0], r[1]): p for r, p in zip(G, P)}
+        return ret
+
+    def setTask(self, task_arg):
+        for arg in task_arg:
+            self.task_arg[arg] = copy.deepcopy(task_arg[arg])
+        self.cache.clear()
+        return self
+
+    def setArch(self, arch_arg):
+        for arg in arch_arg:
+            self.arch_arg[arg] = copy.deepcopy(arch_arg[arg])
+        self.cache.clear()
+        if self.arch_arg["n"] != self.arch_arg["d"]**2:
+            raise Exception("Invalid hardware configuration: d = {}, n = {}".format(self.arch_arg["d"], self.arch_arg["n"]))
+        return self
 
     def __preprocess(self):
         '''Preprocess the task graph and extract its features
@@ -112,9 +133,13 @@ class NocLatencyEstimator:
 
         # Set up P_s2d
         G = self.task_arg["G_R"]
-        Vol = np.asarray([x[2] for x in G])
-        P_s2d = list(Vol / np.sum(Vol))
-        P_s2d = [1 for i in G]
+        G = [(r[0], r[1], r[2] / self.task_arg["l"]) for r in G]      # flit/cycle -> packet/cycle
+
+        # TODO: a single request for a (source, destination) pair only
+        assert max(Counter([(r[0], r[1]) for r in G]).values()) <= 1
+
+        Vol = np.asarray([r[2] for r in G])
+        P_s2d = Vol / np.sum(Vol)
 
         # Set up L_p2p, L, RH, pkt_path
         n, p = self.arch_arg["n"], self.arch_arg["p"]
@@ -213,7 +238,7 @@ class NocLatencyEstimator:
             L = arrival_rate * (ca2 + cs2) / L
             L[0] = L[0] / Service_rate              # input channel
             W[r, :, oc] = L
-        
+
         if np.nan in W:
             raise Exception("NAN in W: rh = {}".format(rh))
 
@@ -256,7 +281,7 @@ class NocLatencyEstimator:
         Router_path = list(map(lambda x: (int(x[0]), int(x[1])), Router_path))
         return Router_path
 
-    def __passedIOChannels(self, path):0
+    def __passedIOChannels(self, path):
         Iport_path = [PORT2IDX["input"]]
         Oport_path = []
         for prev, pres in zip(path[:-1], path[1:]):
@@ -289,13 +314,7 @@ class NocLatencyEstimator:
 
 
 if __name__ == "__main__":
-    arch_arg = {
-        "d": 2,
-        "n": 2 * 2
-    }
     task_arg = {
-        "G_R": [(0, 3, 0.1), (0, 1, 0.05), (1, 2, 0.07), (2, 3, 0.1)]
+        "G_R": [(0, 3, 0.2), (0, 1, 0.2), (1, 2, 0.2), (2, 3, 1)]
     }
-    pm = NocLatencyEstimator(arch_arg, task_arg)
-    T = pm.Latency()
-    print(np.max(T))
+    pm = PEstimator()

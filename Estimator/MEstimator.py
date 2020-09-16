@@ -1,7 +1,8 @@
 import numpy as np
 
+
 # FIXME: 这里的x指的是纵坐标，y指的是横坐标
-class PerformanceModel:
+class MEstimator:
     '''
         Estimating average packet latency for a given mesh configuration
     '''

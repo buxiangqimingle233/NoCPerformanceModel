@@ -1,0 +1,19 @@
+{
+  "config_name": "baseline",
+
+  "prj_arg": {
+    "Estimator": "PEstimator",
+    "CongManager": "SFCongManager"
+  },
+
+  "arch_arg": {
+    "type": "mesh",
+    "d": 8
+  },
+
+  "task_arg": {
+    "path": "sample.txt",
+    "cv_A": 1,
+    "pkt_size": 16
+  }
+}
