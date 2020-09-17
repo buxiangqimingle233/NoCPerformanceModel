@@ -37,7 +37,7 @@ class Driver():
     def execute(self):
         self.__loadClass()
         self.__loadData()
-        sub_tasks = self.cong_manager.doInjection(self.task_arg)
+        sub_tasks = self.cong_manager.doInjection(self.task_arg, self.arch_arg)
         for task in sub_tasks:
             # task lasting time
             width = self.arch_arg["w"]

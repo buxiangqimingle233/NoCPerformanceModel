@@ -8,7 +8,7 @@ class XYRouting:
         self.arch_arg = arch_arg
         self.cache = {}
 
-    def route(self, task_graph):
+    def path(self, task_graph):
         '''Do XY-routing for given task graph
             task_graph: A list of (src, dst, vol)
             Return:
@@ -26,7 +26,7 @@ class XYRouting:
         self.cache["pkt_path"] = ret
         return ret
 
-    def packedRoute(self, task_graph):
+    def packedPath(self, task_graph):
         '''Return routed paths of all requests in task graph handled by assigned routing strategy
         Routing strategy is set as XY routing by default.
             Return:
@@ -35,7 +35,7 @@ class XYRouting:
                 Noted that both input and output channels are in view of routers, i.e. they're serial numbers of routers' ports.
                 You could use zip(*) to get those three path seperately.
         '''
-        P = self.route(task_graph)
+        P = self.path(task_graph)
         ret = {(r[0], r[1]): p for r, p in zip(task_graph, P)}
         return ret
 
@@ -84,6 +84,18 @@ class XYRouting:
             raise Exception("Router exceeded the boundary: router = {}, oc = {}".format(src, oc))
         return ret, ic
 
+    def rc2c(self, r, oc):
+        d = self.arch_arg["d"]
+        base = (r // d) * (2 * d - 1)
+        if oc == PORT2IDX["west"]:
+            ret = base + r % d - 1
+        elif oc == PORT2IDX["east"]:
+            ret = base + r % d
+        elif oc == PORT2IDX["north"]:
+            ret = base + r % d - d
+        elif oc == PORT2IDX["south"]:
+            ret = base + r % d + d - 1
+        return int(ret)
 
 if __name__ == "__main__":
     r = XYRouting({"d": 4})

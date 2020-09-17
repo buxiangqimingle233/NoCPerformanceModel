@@ -3,7 +3,7 @@
 
   "prj_arg": {
     "Estimator": "PEstimator",
-    "CongManager": "SFCongManager"
+    "CongManager": "MUCongManager"
   },
 
   "arch_arg": {

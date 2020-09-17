@@ -86,24 +86,6 @@ class PEstimator(VirEstimator):
         Time = self.__analyzePktTime()
         return Time
 
-    def getRoutedPath(self):
-        '''Return routed paths of all requests in task graph handled by assigned routing strategy
-        Routing strategy is set as XY routing by default.
-            Return:
-                A dict with tuples (src, dst) as keys and pkt_path as values
-                pkt_path: A list whose factors are tuples of (router, input channel, output channel)
-                Noted that both input and output channels are in view of routers, i.e. they're serial numbers of routers' ports.
-                You could use zip(*) to get those three path seperately.
-        '''
-        if not hasattr(self, "task_arg"):
-            raise Exception("Please set task arguments for Estimator first!")
-        if not hasattr(self, "arch_arg"):
-            raise Exception("Please set architecture arguments for Estimator first!")
-        G = self.task_arg["G_R"]
-        P = self.__routeTaskGraph()
-        ret = {(r[0], r[1]): p for r, p in zip(G, P)}
-        return ret
-
     def setTask(self, task_arg):
         for arg in task_arg:
             self.task_arg[arg] = copy.deepcopy(task_arg[arg])
@@ -149,7 +131,7 @@ class PEstimator(VirEstimator):
         L_p2p = np.zeros((n, p, p))
         L = np.zeros(n)
         RH = np.tile(PINF, (n, p)).astype(np.int)
-        pkt_path = self.rter.route(G)
+        pkt_path = self.rter.path(G)
 
         for request, Path, proportion in zip(G, pkt_path, P_s2d):
             Router_path, Iport_path, Oport_path = zip(*Path)
