@@ -18,7 +18,7 @@ class SFCongManager(VirCongManager):
     scale = 1
 
     def __init__(self):
-        print("Small-First-Congestion-Manager has been initilized")
+        print("Log: Small-First-Congestion-Manager has been initialized")
 
     def setTask(self, task):
         if "cv_A" not in task or "pkt_size" not in task:
@@ -39,7 +39,7 @@ class SFCongManager(VirCongManager):
             ijctg = {
                 "G_R": [(p[0], p[1], r) for p, r in zip(subg, rate)]
             }
-            ijctg["G"] = subg
+            ijctg["G_V"] = subg
             ijctg["cv_A"], ijctg["l"] = self.task["cv_A"], self.task["pkt_size"]
             if len(ijctg["G_R"]) == 1:
                 ijctg["cv_A"] = 0

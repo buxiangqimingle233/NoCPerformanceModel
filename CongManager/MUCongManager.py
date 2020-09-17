@@ -8,7 +8,7 @@ class MUCongManager(VirCongManager):
     scale = 1
 
     def __init__(self):
-        print("MU Congestion Manager has been initilized")
+        print("Log: MU Congestion Manager has been initialized")
         self.cache = {}
 
     def doInjection(self, task_arg, arch_arg):
@@ -16,7 +16,7 @@ class MUCongManager(VirCongManager):
         self.__forwardPropagation()
         self.__backwardPropagation()
         ret = [{
-            "G": task_arg["G"],
+            "G_V": task_arg["G"],
             "G_R": [(key[0], key[1], val) for key, val in self.cache["G_R"].items()],
             "l": 16,
             "cv_A": 0
@@ -52,7 +52,7 @@ class MUCongManager(VirCongManager):
         for step in range(np.max(vst_cnt), 0, -1):
             channels = np.where(vst_cnt == step)
             for ch in list(channels[0]):
-                ratio = remain[ch] / len(rvs_ptr[ch])
+                ratio = remain[ch] / (len(rvs_ptr[ch]) + 1e-10)
                 for sd in rvs_ptr[ch]:
                     G_R[sd] = ratio
                     passingby = [self.rter.rc2c(r, oc) for r, ic, oc in packed_path[sd][: -1]]

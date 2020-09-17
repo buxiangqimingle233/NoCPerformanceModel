@@ -17,17 +17,14 @@ os.chdir(root)
 
 class Driver():
 
-    def __init__(self, config_name):        # TODO: Setting default values
-        '''
-            config_
-        '''
+    def __init__(self, config_name):        # TODO: Setting default valuesd
         config_path = root + "/Configuration/" + config_name
+
         # read the configuration file
         if not os.path.exists(config_path):
             raise Exception("Invalid configuration path!")
         with open(config_path, "r") as f:
             self.usr_config = json.load(f)
-
         # default configuration
         with open(root + "/Default/dft_arch.json", "r") as af:
             self.arch_arg = json.load(af)
@@ -41,9 +38,14 @@ class Driver():
         for task in sub_tasks:
             # task lasting time
             width = self.arch_arg["w"]
-            duration = task["G"][0][2] / (task["G_R"][0][2] * width)
-            T = self.estimator.calLatency(task, self.arch_arg)
-            print(duration, T)
+            InjctLatcy = [req_v[2] / (req_r[2] * width) for req_v, req_r in zip(task["G_V"], task["G_R"])]
+            TransLatcy = self.estimator.calLatency(task, self.arch_arg)
+            Latency = [i + j for i, j in zip(InjctLatcy, TransLatcy)]
+            print(" ------------------------- Seperator ---------------------------")
+            print("     Injection task: ", task)
+            print("     Injection Time: ", InjctLatcy)
+            print("     Tansmission Time: ", TransLatcy)
+            print("     Overall Latency: ", max(Latency))
 
     def __loadClass(self):
         # load classes estimator and congestion manager
@@ -74,9 +76,9 @@ class Driver():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("c", help="Name for configuration file (without the need of full path) \
-        e.g. baseline.json")            # TODO: Option arg & default values
+        e.g. baseline.json")
     parser.add_argument("--d", help="Name for task graph (without the need of full path)   \
-        e.g. sample.txt")   # TODO: 加 path
+        e.g. sample.txt")
     args = parser.parse_args()
     driver = Driver(args.c)
     driver.execute()
