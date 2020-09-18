@@ -61,7 +61,7 @@ class MUCongManager(VirCongManager):
                         if c != ch:      # To avoid removing items from the list we're iterating now
                             rvs_ptr[c].remove(sd)
                 rvs_ptr[ch].clear()
-        
+
         self.cache["G_R"] = G_R
 
 

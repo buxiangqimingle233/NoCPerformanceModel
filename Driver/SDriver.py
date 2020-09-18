@@ -11,13 +11,11 @@ sys.path.append(root + "/Estimator")
 sys.path.append(root + "/CongManager")
 sys.path.append(root + "/Util")
 sys.path.append(root + "/Default")
-org_cwd = os.getcwd()
-os.chdir(root)
 
 
 class Driver():
 
-    def __init__(self, config_name):        # TODO: Setting default valuesd
+    def __init__(self, config_name):
         config_path = root + "/Configuration/" + config_name
 
         # read the configuration file
@@ -74,6 +72,7 @@ class Driver():
 
 
 if __name__ == "__main__":
+    os.chdir(root)
     parser = argparse.ArgumentParser()
     parser.add_argument("c", help="Name for configuration file (without the need of full path) \
         e.g. baseline.json")
@@ -82,5 +81,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
     driver = Driver(args.c)
     driver.execute()
-
-os.chdir(org_cwd)
