@@ -30,7 +30,7 @@ class SA:
         while temprature > self.T_min and cnt < self.max_time:
             new_lables, _ = self.__disturbance(deepcopy(self.labels), deepcopy(self.asgn_labels))
             new_consp = self.__consumption(new_lables)
-            delta_E = new_consp - min_consp
+            delta_E = (new_consp - min_consp)
             if self.__judge(delta_E):
                 min_consp = new_consp
             if delta_E < 0:
@@ -52,7 +52,7 @@ class SA:
 
     def __disturbance(self, labels, asgn_labels):
         l1, l2 = sample(asgn_labels.keys(), 2)
-        while asgn_labels[l1] != -1 and asgn_labels[l2] != -1:      # 避免交换两个空的label
+        while asgn_labels[l1] == -1 and asgn_labels[l2] == -1:      # 避免交换两个空的label
             l2, l2 = sample(asgn_labels.keys(), 2)
         try:
             labels[asgn_labels[l1]], labels[asgn_labels[l2]] = l2, l1
