@@ -1,0 +1,4 @@
+{
+  "python.pythonPath": "/home/wangzhao/.pyenv/versions/3.6.9/bin/python",
+  "python.linting.flake8Args": ["--max-line-length=128"]
+}

@@ -5,11 +5,13 @@ from copy import deepcopy
 from random import sample, random, randint
 import math
 
+
 class SA:
     T = 1e5
-    T_min = 1e-5
+    T_min = 1e-3
     alpha = 0.98
-    max_time = 1e6
+    global_epc_limit = 1e6
+    local_epc_limit = 100
 
     def __init__(self, if_graph_path, arch_arg):
         self.arch_arg = arch_arg
@@ -23,20 +25,24 @@ class SA:
         self.asgn_labels = {i: -1 for i in range(n)}
 
     def execute(self):
-        temprature = self.T
-        cnt = 0
+        temperature = self.T
+        overall_counter = 0
         self.__initLabels()
         min_consp = self.__consumption(self.labels)
-        while temprature > self.T_min and cnt < self.max_time:
-            new_lables, _ = self.__disturbance(deepcopy(self.labels), deepcopy(self.asgn_labels))
-            new_consp = self.__consumption(new_lables)
-            delta_E = (new_consp - min_consp)
-            if self.__judge(delta_E):
-                min_consp = new_consp
-            if delta_E < 0:
-                temprature = temprature * self.alpha
-            else:
-                cnt += 1
+        while temperature > self.T_min and overall_counter < self.global_epc_limit:
+            for i in range(self.local_epc_limit):
+                new_lables, new_asgn_labels = self.__disturbance(deepcopy(self.labels), deepcopy(self.asgn_labels))
+                new_consp = self.__consumption(new_lables)
+                delta_E = (new_consp - min_consp) / min_consp * 100
+                if self.__judge(delta_E, temperature):
+                    min_consp = new_consp
+                    self.labels, self.asgn_labels = new_lables, new_asgn_labels
+                if delta_E < 0:     # have found a better solution
+                    break
+            temperature = temperature * self.alpha
+            overall_counter += 1
+            if overall_counter % 100 == 0:
+                print("episode: {}, present consumption: {}, temperature: {}".format(overall_counter, min_consp, temperature))
         print("labels: ", self.labels)
         print("score: ", min_consp)
         return self.labels
@@ -75,10 +81,10 @@ class SA:
             consp += coincidence * (req1[2] + req2[2])
         return consp
 
-    def __judge(self, delta_E):
+    def __judge(self, delta_E, tempreature):
         if delta_E < 0:
             return True
-        elif math.exp(-delta_E / self.T) > random():
+        elif math.exp(-delta_E / tempreature) > random():
             return True
         else:
             return False
