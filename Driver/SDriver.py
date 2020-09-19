@@ -11,14 +11,12 @@ sys.path.append(root + "/Estimator")
 sys.path.append(root + "/CongManager")
 sys.path.append(root + "/Util")
 sys.path.append(root + "/Default")
-sys.path.append(root + "/Mapping")
 
 
 class Driver():
 
     def __init__(self, config_name):
         config_path = root + "/Configuration/" + config_name
-
         # read the configuration file
         if not os.path.exists(config_path):
             raise Exception("Invalid configuration path!")
@@ -30,9 +28,9 @@ class Driver():
         with open(root + "/Default/dft_task.json", "r") as tf:
             self.task_arg = json.load(tf)
 
-    def execute(self):
+    def execute(self, ig_name):
         self.__loadClass()
-        self.__loadData()
+        self.__loadData(ig_name)
         sub_tasks = self.cong_manager.doInjection(self.task_arg, self.arch_arg)
         for task in sub_tasks:
             # task lasting time
@@ -41,9 +39,9 @@ class Driver():
             TransLatcy = self.estimator.calLatency(task, self.arch_arg)
             Latency = [i + j for i, j in zip(InjctLatcy, TransLatcy)]
             print(" ------------------------- Seperator ---------------------------")
-            print("     Injection task: ", task)
-            print("     Injection Time: ", InjctLatcy)
-            print("     Tansmission Time: ", TransLatcy)
+            # print("     Injection task: ", task)
+            print("     Injection Time: {} ...".format(InjctLatcy[:5]))
+            print("     Tansmission Time: {} ...".format(TransLatcy[:5]))
             print("     Overall Latency: ", max(Latency))
 
     def __loadClass(self):
@@ -57,12 +55,16 @@ class Driver():
         self.cong_manager = self.cm_class()
         self.estimator = self.est_class()
 
-    def __loadData(self):
+    def __loadData(self, ig_name):
         # set task graph assignment
         self.task_arg.update(self.usr_config["task_arg"])
         # load communication graph specified by "task_arg.path"
         input_graph = []
-        ig_path = root + "/Data/" + self.usr_config["task_arg"]["path"]
+        # passed arguments first
+        if ig_name == "":
+            ig_path = root + "/Data/" + self.usr_config["task_arg"]["path"]
+        else:
+            ig_path = root + "/Data/" + ig_name
         with open(ig_path, "r") as f:
             for line in f:
                 input_graph.append(line.split(","))
@@ -75,10 +77,13 @@ class Driver():
 if __name__ == "__main__":
     os.chdir(root)
     parser = argparse.ArgumentParser()
-    parser.add_argument("c", help="Name for configuration file (without the need of full path) \
+    parser.add_argument("-c", help="Name for configuration file (without the need of full path) \
         e.g. baseline.json")
     parser.add_argument("--d", help="Name for task graph (without the need of full path)   \
         e.g. sample.txt")
     args = parser.parse_args()
     driver = Driver(args.c)
-    driver.execute()
+
+    external_ig_path = args.d if args.d is not None else ""
+    driver.execute(external_ig_path)
+

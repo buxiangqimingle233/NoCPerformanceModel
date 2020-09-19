@@ -4,11 +4,11 @@ from VirCongManager import VirCongManager
 from Util import XYRouting as RS
 
 
-class MUCongManager(VirCongManager):
+class WUCongManager(VirCongManager):
     scale = 1
 
     def __init__(self):
-        print("Log: MU Congestion Manager has been initialized")
+        print("Log: Employed Weighted-Uniform-Congestion-Manager.")
         self.cache = {}
 
     def doInjection(self, task_arg, arch_arg):
@@ -66,5 +66,5 @@ class MUCongManager(VirCongManager):
 
 
 if __name__ == "__main__":
-    cm = MUCongManager()
+    cm = WUCongManager()
     print(cm.doInjection({"G": [(0, 2, 3), (3, 2, 4), (1, 2, 5)]}, {"d": 4}))

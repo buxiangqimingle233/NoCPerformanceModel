@@ -18,7 +18,7 @@ class SFCongManager(VirCongManager):
     scale = 1
 
     def __init__(self):
-        print("Log: Small-First-Congestion-Manager has been initialized")
+        print("Log: Employed Small-First-Congestion-Manager")
 
     def setTask(self, task):
         if "cv_A" not in task or "pkt_size" not in task:

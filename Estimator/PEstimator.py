@@ -24,6 +24,7 @@ class PEstimator(VirEstimator):
     cache = {}
 
     def __init__(self):
+        print("log: Employed Path-based Estimator")
         # Default configuration for on-chip networks
         self.dft_arch = {}
         self.dft_arch["type"] = "mesh"
