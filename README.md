@@ -11,7 +11,7 @@ A numpy-based performance model for on-chip networks.
   ```python Driver/Driver.py config_name```
 * Noted that config_name is just the name of the configuration file, instead of full path, e.g. "baseline.json"
 
-### - other python script
+### - Other python scripts
 * Import Driver.SDriver.Driver into your program.
 * Instantiate a Driver with the name of configuration file and call execute function, e.g. 
   ```
@@ -19,6 +19,6 @@ A numpy-based performance model for on-chip networks.
   dr.execute()
   ```
 
-## Employ your own Estimator or CongManager
+## Specify your own Estimator or CongManager
 * Your own estimator and congestion manager should inherient from *Estimator/VirEstimator* and *CongManager/VirCongManager* respectively.
 * Put your estimator in *Estimator* and congestion manager in *CongManager* directories correspondingly.
