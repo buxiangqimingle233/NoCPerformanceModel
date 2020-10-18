@@ -1,13 +1,14 @@
 from math import log
 
+
 class Dim():
     '''
         Dimension class for data-centric directives
     '''
 
-    def __init__(self, pos, name, size, map_size, map_ofs, dis_size, dis_ofs):
-        self.pos, self.name, self.size, self.map_size, self.map_ofs, self.dis_size, self.dis_ofs  \
-            = pos, name, size, map_size, map_ofs, dis_size, dis_ofs
+    def __init__(self, name, size, map_size=0, map_ofs=0, dis_size=0, dis_ofs=0):
+        self.name, self.size, self.map_size, self.map_ofs, self.dis_size, self.dis_ofs  \
+            = name, size, map_size, map_ofs, dis_size, dis_ofs
         self.related_dims = []
 
     def takeStep(self, PENum):
@@ -18,9 +19,10 @@ class Dim():
                     data from memory when source is -1.
         '''
         if self.map_size != (PENum - 1) * self.dis_ofs + self.dis_size:
-            raise Exception("Dimension {} is invalid, with parameters as: \n    \
-map_size: {}, map_ofs: {}, dis_size: {}, dis_ofs: {}"
+            raise Exception("Dimension {} is invalid, with parameters as: \n map_size: {}, map_ofs: {}, dis_size: {}, dis_ofs: {}"
                 .format(self.name, self.map_size, self.map_ofs, self.dis_size, self.dis_ofs))
+        if self.size < 0:
+            raise Exception("Please set all the attributes before calling function 'takeStep'")
 
         if all([dim.getDisOfs() == 0 for dim in self.related_dims]) and self.dis_ofs == 0:       # 全都是 TM 就可以broadcast了
             self.comm_graph = self.recursiveDoubling(list(range(PENum)), -1, self.map_ofs)
@@ -107,7 +109,10 @@ map_size: {}, map_ofs: {}, dis_size: {}, dis_ofs: {}"
         return self
 
     def addRelatedDims(self, related_dim):
-        self.related_dims.append(related_dim)
+        if isinstance(related_dim, list):
+            self.related_dims += related_dim
+        else:
+            self.related_dims.append(related_dim)
         return self
 
     def getStepCnt(self):
@@ -127,7 +132,6 @@ map_size: {}, map_ofs: {}, dis_size: {}, dis_ofs: {}"
 
     def getDisOfs(self):
         return self.dis_ofs
-
 
 if __name__ == "__main__":
     dim_X = Dim(1, "X", 16, 6, 1, 3, 1)

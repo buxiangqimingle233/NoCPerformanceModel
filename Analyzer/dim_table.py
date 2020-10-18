@@ -3,33 +3,46 @@ from dim import Dim
 
 class DimTable():
 
-    def __init__(self, dim_list):
-        self.dim_list = dim_list
+    def __init__(self):
+        self.dim_list = []
         self.comm_graph = []
 
-    def genCommGraph(self, config):
-        PE_num = config["PE_num"]
-        # report communication requests
-        # TODO: report memory access counts
-        num_of_iteration = 1
+    def hasDim(self, name):
+        return self.findDim(name) is not None
+
+    def findDim(self, name):
         for dim in self.dim_list:
-            num_of_iteration *= dim.getStepCnt()
-            comm_step = dim.takeStep(PE_num)
-            self.comm_graph += [
-                (item[0], item[1], item[2]*num_of_iteration)
-                for item in comm_step
-            ]
-        self.postProcessing()
-        return self.comm_graph
+            if dim.name == name:
+                return dim
+        return None
 
-    def postProcessing(self):
-        temp_dict = {(req[0], req[1]): 0 for req in self.comm_graph}
-        for req in self.comm_graph:
-            temp_dict[(req[0], req[1])] += req[2]
-        self.comm_graph = [(src, dst, vol) for (src, dst), vol in temp_dict.items()]
+    def findDims(self, names):
+        ret = [self.findDim(name) for name in names]
+        ret = [item for item in ret if item is not None]
+        return ret
 
-        # 自己传自己以及传0
-        self.comm_graph = [item for item in self.comm_graph if item[0] != item[1] and item[-1] != 0]
+    def findDimReturnIndex(self, name):
+        for i in range(len(self.dim_list)):
+            if self.dim_list[i].name == name:
+                return i
+        return None
+    
+    def insertDim(self, dim, index):
+        self.dim_list.insert(index, dim)
+        return self
+
+    def appendDim(self, dim):
+        self.dim_list.append(dim)
+        return self
+
+    def updateDim(self, dim):
+        for i in range(len(self.dim_list)):
+            if self.dim_list[i].getName() == dim.getName():
+                self.dim_list[i] = dim
+        return self
+
+    def getDimList(self):
+        return self.dim_list
 
 
 if __name__ == "__main__":
@@ -38,5 +51,6 @@ if __name__ == "__main__":
     dim_Y = Dim(1, "Y", 16, 3, 1, 3, 0)
     dim_X.addRelatedDims(dim_Y)
     dim_Y.addRelatedDims(dim_X)
-    dimTable = DimTable([dim_Y, dim_X])
+    dimTable = DimTable()
+    dimTable.appendDim(dim_X).appendDim(dim_Y)
     print(dimTable.genCommGraph(config))
