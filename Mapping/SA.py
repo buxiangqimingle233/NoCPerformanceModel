@@ -34,6 +34,7 @@ class SA:
         overall_counter = 0
         self.__initLabels()
         min_consp = self.__consumption(self.labels)
+        print("\n -------------- Task Mapping ---------------\n")
         while temperature > self.T_min and overall_counter < self.global_epc_limit:
             for i in range(self.local_epc_limit):
                 new_lables, new_asgn_labels = self.__disturbance(deepcopy(self.labels), deepcopy(self.asgn_labels))
@@ -104,13 +105,13 @@ if __name__ == "__main__":
     os.chdir(root)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-i", help="Path for communication graph, with the root directory as NoCPerformanceModel")
-    parser.add_argument("-o", help="Path for task graph, with the root directory as NoCPerformanceModel")
-    parser.add_argument("-d", type=int, help="Diameter of a single dimension")
+    parser.add_argument("-i", help="Path for task graph, with the root directory as NoCPerformanceModel")
+    parser.add_argument("-o", help="Path for communication graph, with the root directory as NoCPerformanceModel")
+    parser.add_argument("--d", type=int, help="Diameter of a single dimension")
     args = parser.parse_args()
 
     print("log: Searching for mapping strategy \
-        Path for communication graph: {}  Path for task graph: {}  \
+        Path for task graph: {}  Path for communication graph: {}  \
         Diameter: {}".format(args.i, args.o, args.d))
 
     with open(args.i, "r") as f:

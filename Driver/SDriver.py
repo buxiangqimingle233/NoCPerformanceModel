@@ -16,7 +16,7 @@ sys.path.append(root + "/Default")
 class Driver():
 
     def __init__(self, config_name):
-        config_path = root + "/Configuration/" + config_name
+        config_path = root + "/" + config_name
         # read the configuration file
         if not os.path.exists(config_path):
             raise Exception("Invalid configuration path!")
@@ -62,9 +62,9 @@ class Driver():
         input_graph = []
         # passed arguments first
         if ig_name == "":
-            ig_path = root + "/Data/" + self.usr_config["task_arg"]["path"]
+            ig_path = root + "/" + self.usr_config["task_arg"]["path"]
         else:
-            ig_path = root + "/Data/" + ig_name
+            ig_path = root + "/" + ig_name
         with open(ig_path, "r") as f:
             for line in f:
                 input_graph.append(line.split(","))
@@ -77,13 +77,12 @@ class Driver():
 if __name__ == "__main__":
     os.chdir(root)
     parser = argparse.ArgumentParser()
-    parser.add_argument("-c", help="Name for configuration file (without the need of full path) \
-        e.g. baseline.json")
-    parser.add_argument("--d", help="Name for task graph (without the need of full path)   \
-        e.g. sample.txt")
+    parser.add_argument("-c", help="Relative path for configuration file \
+        e.g. Configuration/baseline.json")
+    parser.add_argument("-i", help="Relative path for communication graph \
+        e.g. Data/sample.txt")
     args = parser.parse_args()
     driver = Driver(args.c)
 
-    external_ig_path = args.d if args.d is not None else ""
+    external_ig_path = args.i if args.i is not None else ""
     driver.execute(external_ig_path)
-

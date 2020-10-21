@@ -12,7 +12,7 @@
   },
 
   "task_arg": {
-    "path": "Example.txt",
+    "path": "Data/Example.txt",
     "cv_A": 1,
     "pkt_size": 16
   }

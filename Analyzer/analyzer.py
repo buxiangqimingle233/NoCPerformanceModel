@@ -5,13 +5,23 @@
 # cluster-based analysis: 
 #   Input: pe physical indecies
 #   Output: communication graph in the cluster
-
 from directive import Directive
 from directive_table import DirectiveTable
 from transformer import Transformer
 from cluster_analysis_engine import ClusterAnalysisEngine as Engine
 
 import re
+import os
+import sys
+import argparse
+
+root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(root)
+sys.path.append(root + "/Driver")
+sys.path.append(root + "/Estimator")
+sys.path.append(root + "/CongManager")
+sys.path.append(root + "/Util")
+sys.path.append(root + "/Default")
 
 class Analyzer():
 
@@ -39,7 +49,7 @@ class Analyzer():
             line = f.readline()
             while line:
                 if line.find("Type") != -1:
-                    pattern = re.compile(r"Type:([a-z]+)")
+                    pattern = re.compile(r"Type:\s*([a-z]+)")
                     layer_type = pattern.match(line).group(1)
 
                     line = f.readline()
@@ -63,12 +73,18 @@ class Analyzer():
                     layers.append({"directive_table": directive_table, "layer_type": layer_type})
                     line = f.readline()
                 else:
-                    raise Exception("Logic error!")
+                    raise Exception("Directive syntax error!")
 
         return layers
 
 
 if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-i", help="Path for directives, with the root directory as NoCPerformanceModel")
+    parser.add_argument("-o", help="Path for task graph, with the root directory as NoCPerformanceModel")
+    parser.add_argument("-d", type=int, help="Diameter of a single dimension")
+    args = parser.parse_args()
     analyzer = Analyzer()
-    comm_graph = analyzer.analyze(r"F:\Code\NoCPerformanceModel\implementation\Analyzer\test.txt", {"pe_num": 16})
+    comm_graph = analyzer.analyze("test.txt", {"pe_num": 16})
     print(comm_graph)

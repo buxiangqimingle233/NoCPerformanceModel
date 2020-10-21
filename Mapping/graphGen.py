@@ -34,7 +34,7 @@ if __name__ == "__main__":
     parser.add_argument("-d", type=int, help="Diameter of a single dimension")
     args = parser.parse_args()
 
-    print("log: Generating communication graph \
-        Path for communication graph: {}. Diameter: {}\n\n".format(args.o, args.d))
+    print("log: Generating task graph \
+        Path for task graph: {}. Diameter: {}".format(args.o, args.d))
     generate(args.o, {"d": args.d, "n": args.d**2})
     os.chdir(org_cwd)
