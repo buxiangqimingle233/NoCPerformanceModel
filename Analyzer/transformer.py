@@ -3,6 +3,7 @@ from dim_table import DimTable
 from directive import Directive
 from dim import Dim
 
+
 class Transformer():
     '''Transform data-centric directives to comm-centric directives for a cluster
         Transfrom to wz-regular data-centric directives first
@@ -23,7 +24,7 @@ class Transformer():
         dim_table = self.addMissingDims(dim_table, layer_type)
         dim_table = self.setRelatedDims(dim_table, layer_type)
 
-        return dim_table, cluster_num
+        return dim_table, cluster_size
 
     def analyzeDirectives(self, directive_table, layer_type, cluster_size, cluster_num):
 

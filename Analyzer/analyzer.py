@@ -14,6 +14,7 @@ import re
 import os
 import sys
 import argparse
+import json
 
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(root)
@@ -23,28 +24,32 @@ sys.path.append(root + "/CongManager")
 sys.path.append(root + "/Util")
 sys.path.append(root + "/Default")
 
+
 class Analyzer():
 
     def __init__(self):
         super().__init__()
 
-    def analyze(self, directive_path, hardware_config):
-        layers = self.readDirectiveFile(directive_path)
+    def analyze(self, comm_graph_path, directive_path, arch_config_path):
+        layers = self.__readDirectiveFile(directive_path)
+        arch_config = self.__readArchConfig(arch_config_path)
         transformer = Transformer()
         comm_graph = []
         for layer in layers:
             directive_table, layer_type = layer["directive_table"], layer["layer_type"]
-            pe_num = hardware_config["pe_num"]
+            pe_num = arch_config["n"]
             dim_table, cluster_size = transformer.transform(directive_table, layer_type, pe_num)
             # cluster_num = pe_num // cluster_size
             cluster_indexes = [(begin, begin + cluster_size) for begin in range(0, pe_num, cluster_size)]
             cluster_analysis_engine = Engine()
             for cluster_index_range in cluster_indexes:
                 comm_graph += cluster_analysis_engine.analyzeCluster(cluster_index_range, dim_table)
+        self.__writeCommGraph(comm_graph_path, comm_graph)
         return comm_graph
 
-    def readDirectiveFile(self, directive_path):
-        with open(directive_path, 'r') as f:
+    def __readDirectiveFile(self, directive_path):
+        full_directive_path = root + "/" + directive_path
+        with open(full_directive_path, 'r') as f:
             layers = []
             line = f.readline()
             while line:
@@ -74,17 +79,35 @@ class Analyzer():
                     line = f.readline()
                 else:
                     raise Exception("Directive syntax error!")
-
+        self.layers = layers
         return layers
+
+    def __readArchConfig(self, arch_config_path):
+        full_arch_config_path = root + "/" + arch_config_path
+        if not os.path.exists(full_arch_config_path):
+            raise Exception("Invalid configuration path!")
+        with open(full_arch_config_path, "r") as f:
+            self.arch_config = json.load(f)
+        return self.arch_config
+
+    def __writeCommGraph(self, comm_graph_path, comm_graph):
+        full_comm_graph_path = root + "/" + comm_graph_path
+        with open(full_comm_graph_path, "w") as f:   # TODO: 文件未存在的时候应该创建一个
+            for req in comm_graph:
+                req_ = [i for i in req]
+                for i in range(len(req_)):
+                    if req_[i] < 0:
+                        req_[i] = 0
+                if req_[0] == req_[1]:
+                    continue
+                f.write(",".join(str(x) for x in req_) + "\n")       # FIXME: 这里只是为了跑通，-1该处理还是要处理的
 
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", help="Path for directives, with the root directory as NoCPerformanceModel")
-    parser.add_argument("-o", help="Path for task graph, with the root directory as NoCPerformanceModel")
-    parser.add_argument("-d", type=int, help="Diameter of a single dimension")
+    parser.add_argument("-o", help="Path for communication graph, with the root directory as NoCPerformanceModel")
+    parser.add_argument("-c", help="Path for configuration file,  with the root directory as NoCPerformanceModel")
     args = parser.parse_args()
     analyzer = Analyzer()
-    comm_graph = analyzer.analyze("test.txt", {"pe_num": 16})
-    print(comm_graph)
+    comm_graph = analyzer.analyze(args.o, args.i, args.c)

@@ -7,13 +7,10 @@
   },
 
   "arch_arg": {
-    "type": "mesh",
-    "d": 8
+    "type": "mesh"
   },
 
   "task_arg": {
-    "path": "Data/Example.txt",
-    "cv_A": 1,
-    "pkt_size": 16
+    "path": "Data/Example.txt"
   }
 }

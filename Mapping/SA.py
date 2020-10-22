@@ -5,6 +5,9 @@ from copy import deepcopy
 from random import sample, random, randint
 import argparse
 import math
+import json
+
+root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 class SA:
@@ -19,17 +22,12 @@ class SA:
     global_epc_limit = 1e6
     local_epc_limit = 100
 
-    def __init__(self, if_graph, arch_arg):
+    def __init__(self):
         print("log: Employing SA for searching mapping stratey")
-        self.arch_arg = arch_arg
-        n = self.arch_arg["n"]
-        srcs, dsts, vols = zip(*if_graph)
-        self.comm_graph = {sd: vol for sd, vol in zip(zip(srcs, dsts), vols)}
-        self.nodes = list(set(srcs + dsts))
-        self.labels = {node: -1 for node in self.nodes}
-        self.asgn_labels = {i: -1 for i in range(n)}
+        super().__init__()
 
-    def execute(self):
+    def execute(self, task_graph_path, comm_graph_path, arch_config_path):
+        self.__readData(comm_graph_path, arch_config_path)
         temperature = self.T
         overall_counter = 0
         self.__initLabels()
@@ -39,7 +37,7 @@ class SA:
             for i in range(self.local_epc_limit):
                 new_lables, new_asgn_labels = self.__disturbance(deepcopy(self.labels), deepcopy(self.asgn_labels))
                 new_consp = self.__consumption(new_lables)
-                delta_E = (new_consp - min_consp) / min_consp * 100
+                delta_E = (new_consp - min_consp) / (min_consp + 1e-10) * 100
                 if self.__judge(delta_E, temperature):
                     min_consp = new_consp
                     self.labels, self.asgn_labels = new_lables, new_asgn_labels
@@ -54,7 +52,19 @@ class SA:
 
         L = self.labels
         task_graph = [(L[src], L[dst], self.comm_graph[(src, dst)]) for src, dst in self.comm_graph]
+
+        self.__writeTaskGraph(task_graph_path, task_graph)
         return task_graph
+
+    def __readData(self, comm_graph_path, arch_config_path):
+        arch_arg = self.__readArchConfig(arch_config_path)
+        comm_graph = self.__readCommGraph(comm_graph_path)
+        n = self.arch_arg["n"]
+        srcs, dsts, vols = zip(*comm_graph)
+        self.comm_graph = {sd: vol for sd, vol in zip(zip(srcs, dsts), vols)}
+        self.nodes = list(set(srcs + dsts))
+        self.labels = {node: -1 for node in self.nodes}
+        self.asgn_labels = {i: -1 for i in range(n)}
 
     def __initLabels(self):
         n = self.arch_arg["n"]
@@ -76,7 +86,7 @@ class SA:
         asgn_labels[l1], asgn_labels[l2] = asgn_labels[l2], asgn_labels[l1]     # swap assigned labels
         return labels, asgn_labels
 
-    def __consumption(self, labels):
+    def __consumption(self, labels):        # FIXME: 把SDriver接过来
         d = self.arch_arg["d"]
         consp = 0
         comm_graph = [list(sd) + [self.comm_graph[sd]] for sd in self.comm_graph]
@@ -98,31 +108,38 @@ class SA:
         else:
             return False
 
+    def __readCommGraph(self, comm_graph_path):
+        full_comm_graph_path = root + "/" + comm_graph_path
+        with open(full_comm_graph_path, "r") as f:
+            comm_graph = [eval(line) for line in f]
+        self.comm_graph = comm_graph
+        return comm_graph
+
+    def __readArchConfig(self, arch_config_path):
+        full_arch_config_path = root + "/" + arch_config_path
+        if not os.path.exists(full_arch_config_path):
+            raise Exception("Invalid configuration path!")
+        with open(full_arch_config_path, "r") as f:
+            self.arch_arg = json.load(f)
+        return self.arch_arg
+
+    def __writeTaskGraph(self, task_graph_path, task_graph):
+        full_task_graph_path = root + "/" + task_graph_path
+        with open(full_task_graph_path, "w") as f:
+            for req in task_graph:
+                f.write(",".join(str(x) for x in req) + "\n")
+
 
 if __name__ == "__main__":
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    org_cwd = os.getcwd()
-    os.chdir(root)
-
     parser = argparse.ArgumentParser()
-    parser.add_argument("-i", help="Path for task graph, with the root directory as NoCPerformanceModel")
-    parser.add_argument("-o", help="Path for communication graph, with the root directory as NoCPerformanceModel")
-    parser.add_argument("--d", type=int, help="Diameter of a single dimension")
+    parser.add_argument("-i", help="Path for communication graph, with the root directory as NoCPerformanceModel")
+    parser.add_argument("-o", help="Path for task graph, with the root directory as NoCPerformanceModel")
+    parser.add_argument("-c", help="Path for architecture configruation.")
     args = parser.parse_args()
 
     print("log: Searching for mapping strategy \
-        Path for task graph: {}  Path for communication graph: {}  \
-        Diameter: {}".format(args.i, args.o, args.d))
+        Path for communication graph: {}  Path for task graph: {}  \
+        Configuration path: {}".format(args.i, args.o, args.c))
 
-    with open(args.i, "r") as f:
-        if_graph = [eval(line) for line in f]
-    d = args.d if hasattr(args, "d") else 4
-
-    sa = SA(if_graph, {"d": d, "n": d * d})
-    task_graph = sa.execute()
-
-    with open(args.o, "w") as f:
-        for req in task_graph:
-            f.write(",".join(str(x) for x in req) + "\n")
-
-    os.chdir(org_cwd)
+    sa = SA()
+    sa.execute(args.o, args.i, args.c)

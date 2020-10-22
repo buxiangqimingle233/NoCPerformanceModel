@@ -1,11 +1,12 @@
 #!/bin/bash
 task_graph_path="Temp/taskGraph.txt"
-comm_graph_path="Temp/CommGraph.txt"
-config_path="Configuration/baseline.json"
+comm_graph_path="Temp/commGraph.txt"
 directive_path="Data/test.txt"
+arch_config_path="Default/dft_arch.json"
+usr_config_path="Configuration/baseline.json"
 pe_diameter=4
 cd ..
 # python Mapping/graphGen.py -d $pe_diameter -o $comm_graph_path
-python Analyzer/analyzer.py -i $directive_path -o $task_graph_path -c $config_path
-python Mapping/SA.py -i $task_graph_path -o $comm_graph_path -d $pe_diameter
-python Driver/SDriver.py -i $comm_graph_path -c $config_path
+# python Analyzer/analyzer.py -o $task_graph_path -i $directive_path -c $arch_config_path
+# python Mapping/SA.py -o $comm_graph_path -i $task_graph_path -c $arch_config_path
+python Driver/SDriver.py -i $task_graph_path -c $usr_config_path

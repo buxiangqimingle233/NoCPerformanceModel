@@ -15,12 +15,12 @@ sys.path.append(root + "/Default")
 
 class Driver():
 
-    def __init__(self, config_name):
-        config_path = root + "/" + config_name
+    def __init__(self, arch_config_path):
+        full_arch_config_path = root + "/" + arch_config_path
         # read the configuration file
-        if not os.path.exists(config_path):
+        if not os.path.exists(full_arch_config_path):
             raise Exception("Invalid configuration path!")
-        with open(config_path, "r") as f:
+        with open(full_arch_config_path, "r") as f:
             self.usr_config = json.load(f)
         # default configuration
         with open(root + "/Default/dft_arch.json", "r") as af:
@@ -28,9 +28,9 @@ class Driver():
         with open(root + "/Default/dft_task.json", "r") as tf:
             self.task_arg = json.load(tf)
 
-    def execute(self, ig_name):
+    def execute(self, task_graph_path):
         self.__loadClass()
-        self.__loadData(ig_name)
+        _ = self.__loadTaskGraph(task_graph_path)
         sub_tasks = self.cong_manager.doInjection(self.task_arg, self.arch_arg)
         for task in sub_tasks:
             # task lasting time
@@ -55,23 +55,25 @@ class Driver():
         self.cong_manager = self.cm_class()
         self.estimator = self.est_class()
 
-    def __loadData(self, ig_name):
-        # set task graph assignment
-        self.task_arg.update(self.usr_config["task_arg"])
+    def __loadTaskGraph(self, task_graph_path):
         # load communication graph specified by "task_arg.path"
-        input_graph = []
+        task_graph = []
         # passed arguments first
-        if ig_name == "":
-            ig_path = root + "/" + self.usr_config["task_arg"]["path"]
+        if task_graph_path == "":
+            full_task_graph_path = root + "/" + self.usr_config["task_arg"]["path"]
         else:
-            ig_path = root + "/" + ig_name
-        with open(ig_path, "r") as f:
+            full_task_graph_path = root + "/" + task_graph_path
+        with open(full_task_graph_path, "r") as f:
             for line in f:
-                input_graph.append(line.split(","))
-        input_graph = [(int(r[0]), int(r[1]), float(r[2])) for r in input_graph]
-        self.task_arg["G"] = input_graph
-        # set user architecture assignment
-        self.arch_arg.update(self.usr_config["arch_arg"])
+                task_graph.append(line.split(","))
+        task_graph = [(int(r[0]), int(r[1]), float(r[2])) for r in task_graph]
+        self.task_arg["G"] = task_graph
+
+        # # set task graph assignment
+        # self.task_arg.update(self.usr_config["task_arg"])
+        # # set user architecture assignment
+        # self.arch_arg.update(self.usr_config["arch_arg"])
+        return task_graph
 
 
 if __name__ == "__main__":
@@ -79,7 +81,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", help="Relative path for configuration file \
         e.g. Configuration/baseline.json")
-    parser.add_argument("-i", help="Relative path for communication graph \
+    parser.add_argument("-i", help="Relative path for task graph \
         e.g. Data/sample.txt")
     args = parser.parse_args()
     driver = Driver(args.c)

@@ -15,11 +15,12 @@ class WUCongManager(VirCongManager):
         self.__setTaskArch(task_arg, arch_arg)
         self.__forwardPropagation()
         self.__backwardPropagation()
+
         ret = [{
             "G_V": task_arg["G"],
             "G_R": [(key[0], key[1], val) for key, val in self.cache["G_R"].items()],
-            "l": 16,
-            "cv_A": 0
+            "l": task_arg["l"],
+            "cv_A": task_arg["cv_A"]
         }]          # we have only one graph now
         return ret
 
