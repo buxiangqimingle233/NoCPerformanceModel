@@ -95,11 +95,11 @@ class Analyzer():
         with open(full_comm_graph_path, "w") as f:   # TODO: 文件未存在的时候应该创建一个
             for req in comm_graph:
                 req_ = [i for i in req]
-                for i in range(len(req_)):
-                    if req_[i] < 0:
-                        req_[i] = 0
-                if req_[0] == req_[1]:
-                    continue
+                # for i in range(len(req_)):
+                #     if req_[i] < 0:
+                #         req_[i] = 0
+                # if req_[0] == req_[1]:
+                #     continue
                 f.write(",".join(str(x) for x in req_) + "\n")       # FIXME: 这里只是为了跑通，-1该处理还是要处理的
 
 
@@ -111,3 +111,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     analyzer = Analyzer()
     comm_graph = analyzer.analyze(args.o, args.i, args.c)
+
+    print("\nlog: Generating communication graph for specified directives",
+          "Path for directive file: " + args.i,
+          "Path for communication graph: " + args.o,
+          "Path for configuration file: " + args.c,
+          sep="\n")

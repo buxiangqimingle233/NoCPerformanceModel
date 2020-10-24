@@ -5,7 +5,7 @@ from Util import XYRouting as RS
 
 
 class WUCongManager(VirCongManager):
-    scale = 1
+    scale = 10
 
     def __init__(self):
         print("Log: Employed Weighted-Uniform-Congestion-Manager.")
@@ -18,7 +18,7 @@ class WUCongManager(VirCongManager):
 
         ret = [{
             "G_V": task_arg["G"],
-            "G_R": [(key[0], key[1], val) for key, val in self.cache["G_R"].items()],
+            "G_R": [(key[0], key[1], val * self.scale) for key, val in self.cache["G_R"].items()],
             "l": task_arg["l"],
             "cv_A": task_arg["cv_A"]
         }]          # we have only one graph now

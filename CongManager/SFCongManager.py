@@ -26,8 +26,8 @@ class SFCongManager(VirCongManager):
         self.task = task
         return self
 
-    def doInjection(self, task, arch_arg):
-        self.setTask(task)
+    def doInjection(self, task_arg, arch_arg):
+        self.setTask(task_arg)
         G = self.task["G"]
         G.sort(key=lambda x: x[-1])
         partition = self.__partition()
