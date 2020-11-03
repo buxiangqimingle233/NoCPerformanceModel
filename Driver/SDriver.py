@@ -18,13 +18,14 @@ class Driver():
     def __init__(self):
         print("log: Employ SDriver.")
 
-    def execute(self, task_graph_path, usr_config_path, arch_config_path):
+    def execute(self, task_graph_path, usr_config_path, arch_config_path, should_print):
         self.__loadConfigs(usr_config_path, arch_config_path)
         self.__loadTaskGraph(task_graph_path)
         self.__rectangle2Square()
         self.__loadClass()
 
         sub_tasks = self.cong_manager.doInjection(self.task_arg, self.arch_arg)
+        total_latency = 0
         for task in sub_tasks:
             # task lasting time
             width = self.arch_arg["w"]
@@ -32,14 +33,18 @@ class Driver():
             transmission_latency = self.estimator.calLatency(task, self.arch_arg)
             latency = [i + j for i, j in zip(inject_latency, transmission_latency)]
             inject_ratio = [i / j for i, j in zip(inject_latency, latency)]
-            assert(False not in [i > 0 for i in transmission_latency])
+            if False in [i > 0 for i in transmission_latency]:
+                raise Exception("Negative transmission latency occurs!!!")
             max_idx = latency.index(max(latency))
-            print("\n -------------------- Estimation Result -----------------------\n")
-            # print("     Injection task: ", task)
-            print("     Injection Time: {} ...".format(inject_latency[:5]))
-            print("     Tansmission Time: {} ...".format(transmission_latency[:5]))
-            print("     Overall Time: {}, ratio of injection time: {}, injection time: {}, transmission time: {}"
-                  .format(latency[max_idx], inject_ratio[max_idx], inject_latency[max_idx], transmission_latency[max_idx]))
+            if should_print:
+                print("\n -------------------- Estimation Result -----------------------\n")
+                # print("     Injection task: ", task)
+                print("     Injection Time: {} ...".format(inject_latency[:5]))
+                print("     Tansmission Time: {} ...".format(transmission_latency[:5]))
+                print("     Overall Time: {}, ratio of injection time: {}, injection time: {}, transmission time: {}"
+                    .format(latency[max_idx], inject_ratio[max_idx], inject_latency[max_idx], transmission_latency[max_idx]))
+                total_latency += latency[max_idx]
+        return total_latency
 
     def __loadClass(self):
         # load classes estimator and congestion manager
@@ -112,4 +117,4 @@ if __name__ == "__main__":
     parser.add_argument("-ac", help="Relative path for architecture configuration, e.g. Default/dft_task.json")
     args = parser.parse_args()
     driver = Driver()
-    driver.execute(args.i, args.uc, args.ac)
+    driver.execute(args.i, args.uc, args.ac, True)

@@ -1,5 +1,5 @@
 import os
-# import sys
+import sys
 # import numpy as np
 from copy import deepcopy
 from random import sample, random, randint
@@ -8,6 +8,10 @@ import math
 import json
 
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(root)
+sys.path.append(root + "/Driver")
+
+from Driver.SDriver import Driver
 
 
 class SA:
@@ -25,8 +29,13 @@ class SA:
     def __init__(self):
         print("log: Employing SA for searching mapping stratey")
         super().__init__()
+        self.estimate_driver = Driver()
 
     def execute(self, task_graph_path, comm_graph_path, arch_config_path):
+        self.task_graph_path = task_graph_path
+        self.comm_graph_path = comm_graph_path
+        self.arc_config_path = arch_config_path
+
         self.__readData(comm_graph_path, arch_config_path)
         temperature = self.T
         overall_counter = 0
@@ -35,14 +44,17 @@ class SA:
         print("\n -------------- Task Mapping ---------------\n")
         while temperature > self.T_min and overall_counter < self.global_epc_limit:
             for i in range(self.local_epc_limit):
-                new_lables, new_asgn_labels = self.__disturbance(deepcopy(self.labels), deepcopy(self.asgn_labels))
-                new_consp = self.__consumption(new_lables)
-                delta_E = (new_consp - min_consp) / (min_consp + 1e-10) * 100
-                if self.__judge(delta_E, temperature):
-                    min_consp = new_consp
-                    self.labels, self.asgn_labels = new_lables, new_asgn_labels
-                if delta_E < 0:     # have found a better solution
-                    break
+                try:
+                    new_lables, new_asgn_labels = self.__disturbance(deepcopy(self.labels), deepcopy(self.asgn_labels))
+                    new_consp = self.__consumption(new_lables)
+                    delta_E = (new_consp - min_consp) / (min_consp + 1e-10) * 100
+                    if self.__judge(delta_E, temperature):
+                        min_consp = new_consp
+                        self.labels, self.asgn_labels = new_lables, new_asgn_labels
+                    if delta_E < 0:     # have found a better solution
+                        break
+                except Exception:
+                    pass
             temperature = temperature * self.alpha
             overall_counter += 1
             if overall_counter % 100 == 0:
@@ -97,15 +109,16 @@ class SA:
     def __consumption(self, labels):
         d = self.arch_arg["d"]
         consp = 0
-        comm_graph = [list(sd) + [self.comm_graph_between_pe[sd]] for sd in self.comm_graph_between_pe]
-        for req1, req2 in zip(comm_graph[:-1], comm_graph[1:]):
-            src1, dst1, src2, dst2 = \
-                labels[req1[0]], labels[req1[1]], labels[req2[0]], labels[req2[1]]
-            (src1_x, src1_y), (dst1_x, dst1_y), (src2_x, src2_y), (dst2_x, dst2_y) = \
-                map(lambda x: (x // d, x % d), (src1, dst1, src2, dst2))
-            coincidence = min(abs(src1_x - dst1_x), abs(src2_x - dst2_x)) if src1_y == src2_y else 0
-            coincidence += min(abs(src1_y - dst1_y), abs(src2_y - dst2_y)) if src1_x == src2_x else 0
-            consp += coincidence * (req1[2] + req2[2])
+        task_graph = self.__label2TaskGraph(labels)
+        self.__writeTaskGraph(self.task_graph_path, task_graph)
+        consp = self.estimate_driver.execute(self.task_graph_path, "Configuration/baseline.json", self.arc_config_path, False)
+        # for req1, req2 in zip(task_graph[:-1], task_graph[1:]):
+        #     src1, dst1, src2, dst2 = req1[0], req1[1], req2[0], req2[1]
+        #     (src1_x, src1_y), (dst1_x, dst1_y), (src2_x, src2_y), (dst2_x, dst2_y) = \
+        #         map(lambda x: (x // d, x % d), (src1, dst1, src2, dst2))
+        #     coincidence = min(abs(src1_x - dst1_x), abs(src2_x - dst2_x)) if src1_y == src2_y else 0
+        #     coincidence += min(abs(src1_y - dst1_y), abs(src2_y - dst2_y)) if src1_x == src2_x else 0
+        #     consp += coincidence * (req1[2] + req2[2])
         return consp
 
     def __judge(self, delta_E, tempreature):

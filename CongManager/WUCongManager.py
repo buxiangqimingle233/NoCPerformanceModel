@@ -5,7 +5,7 @@ from Util import XYRouting as RS
 
 
 class WUCongManager(VirCongManager):
-    scale = 10
+    scale = 1
 
     def __init__(self):
         print("Log: Employed Weighted-Uniform-Congestion-Manager.")

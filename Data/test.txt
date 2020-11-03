@@ -1,0 +1,10 @@
+Type:conv {
+    Dimensions { K: 64, C: 3, R: 7, S: 7, Y:224, X:224 }
+    K, SM, 1, 1
+    C, TM, 3, 3
+    R, TM, 7, 7
+    S, TM, 7, 7
+    CL, CL, 4, 4
+    X, SM, 7, 7
+    Y, SM, 7, 7
+}
