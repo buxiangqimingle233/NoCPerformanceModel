@@ -18,12 +18,22 @@ class Driver():
     def __init__(self):
         print("log: Employ SDriver.")
 
+    def execute_mem(self, task_graph, usr_config_path, arch_config_path, should_print):
+        if not hasattr(self, "arch_arg"):
+            self.__loadConfigs(usr_config_path, arch_config_path)
+        self.task_arg["G"] = task_graph
+        self.__rectangle2Square()
+        self.__loadClass()
+        return self.do_execution(should_print)
+
     def execute(self, task_graph_path, usr_config_path, arch_config_path, should_print):
         self.__loadConfigs(usr_config_path, arch_config_path)
         self.__loadTaskGraph(task_graph_path)
         self.__rectangle2Square()
         self.__loadClass()
+        return self.do_execution(should_print)
 
+    def do_execution(self, should_print):
         sub_tasks = self.cong_manager.doInjection(self.task_arg, self.arch_arg)
         total_latency = 0
         for task in sub_tasks:

@@ -110,8 +110,8 @@ class SA:
         d = self.arch_arg["d"]
         consp = 0
         task_graph = self.__label2TaskGraph(labels)
-        self.__writeTaskGraph(self.task_graph_path, task_graph)
-        consp = self.estimate_driver.execute(self.task_graph_path, "Configuration/baseline.json", self.arc_config_path, False)
+        # self.__writeTaskGraph(self.task_graph_path, task_graph)
+        consp = self.estimate_driver.execute_mem(task_graph, "Configuration/baseline.json", self.arc_config_path, False)
         # for req1, req2 in zip(task_graph[:-1], task_graph[1:]):
         #     src1, dst1, src2, dst2 = req1[0], req1[1], req2[0], req2[1]
         #     (src1_x, src1_y), (dst1_x, dst1_y), (src2_x, src2_y), (dst2_x, dst2_y) = \
