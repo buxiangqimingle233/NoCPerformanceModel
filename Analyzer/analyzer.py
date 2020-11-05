@@ -5,6 +5,7 @@
 # cluster-based analysis: 
 #   Input: pe physical indecies
 #   Output: communication graph in the cluster
+
 from directive import Directive
 from directive_table import DirectiveTable
 from transformer import Transformer
@@ -15,6 +16,7 @@ import os
 import sys
 import argparse
 import json
+from iteration_utilities import deepflatten
 
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(root)
@@ -35,6 +37,7 @@ class Analyzer():
         arch_config = self.__readArchConfig(arch_config_path)
         transformer = Transformer()
         comm_graph = []
+        comm_graph_finer_granularity = []
         for layer in layers:
             directive_table, layer_type = layer["directive_table"], layer["layer_type"]
             pe_num = arch_config["n"]
@@ -43,8 +46,11 @@ class Analyzer():
             cluster_indexes = [(begin, begin + cluster_size) for begin in range(0, pe_num, cluster_size)]
             cluster_analysis_engine = Engine()
             for cluster_index_range in cluster_indexes:
-                comm_graph += cluster_analysis_engine.analyzeCluster(cluster_index_range, dim_table)
+                cg, cg_fgn = cluster_analysis_engine.analyzeCluster(cluster_index_range, dim_table)
+                comm_graph += cg
+                comm_graph_finer_granularity += cg_fgn
         self.__writeCommGraph(comm_graph_path, comm_graph)
+        self.__writeCommGraph(comm_graph_path[:-4] + "_fgn" + comm_graph_path[-4:], comm_graph_finer_granularity)
         return comm_graph
 
     def __readDirectiveFile(self, directive_path):
@@ -94,13 +100,8 @@ class Analyzer():
         full_comm_graph_path = root + "/" + comm_graph_path
         with open(full_comm_graph_path, "w") as f:   # TODO: 文件未存在的时候应该创建一个
             for req in comm_graph:
-                req_ = [i for i in req]
-                # for i in range(len(req_)):
-                #     if req_[i] < 0:
-                #         req_[i] = 0
-                # if req_[0] == req_[1]:
-                #     continue
-                f.write(",".join(str(x) for x in req_) + "\n")       # FIXME: 这里只是为了跑通，-1该处理还是要处理的
+                req_ = list(deepflatten(req))
+                f.write(",".join(str(x) for x in req_) + "\n")
 
 
 if __name__ == "__main__":

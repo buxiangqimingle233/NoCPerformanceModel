@@ -59,12 +59,12 @@ class SA:
             overall_counter += 1
             if overall_counter % 100 == 0:
                 print("episode: {}, present consumption: {}, temperature: {}".format(overall_counter, min_consp, temperature))
-        print("labels: ", self.labels)
-        print("score: ", min_consp)
 
         # FIXME: 实验设置
         # self.labels = {i: i for i in range(len(self.labels))}
 
+        print("labels: ", self.labels)
+        print("score: ", min_consp)
         task_graph = self.__label2TaskGraph(self.labels)
         self.__writeTaskGraph(task_graph_path, task_graph)
         # self.__writeTaskGraph(task_graph_path, comm_graph_path)
@@ -111,14 +111,14 @@ class SA:
         consp = 0
         task_graph = self.__label2TaskGraph(labels)
         # self.__writeTaskGraph(self.task_graph_path, task_graph)
-        consp = self.estimate_driver.execute_mem(task_graph, "Configuration/baseline.json", self.arc_config_path, False)
-        # for req1, req2 in zip(task_graph[:-1], task_graph[1:]):
-        #     src1, dst1, src2, dst2 = req1[0], req1[1], req2[0], req2[1]
-        #     (src1_x, src1_y), (dst1_x, dst1_y), (src2_x, src2_y), (dst2_x, dst2_y) = \
-        #         map(lambda x: (x // d, x % d), (src1, dst1, src2, dst2))
-        #     coincidence = min(abs(src1_x - dst1_x), abs(src2_x - dst2_x)) if src1_y == src2_y else 0
-        #     coincidence += min(abs(src1_y - dst1_y), abs(src2_y - dst2_y)) if src1_x == src2_x else 0
-        #     consp += coincidence * (req1[2] + req2[2])
+        # consp = self.estimate_driver.execute_mem(task_graph, "Configuration/baseline.json", self.arc_config_path, False)
+        for req1, req2 in zip(task_graph[:-1], task_graph[1:]):
+            src1, dst1, src2, dst2 = req1[0], req1[1], req2[0], req2[1]
+            (src1_x, src1_y), (dst1_x, dst1_y), (src2_x, src2_y), (dst2_x, dst2_y) = \
+                map(lambda x: (x // d, x % d), (src1, dst1, src2, dst2))
+            coincidence = min(abs(src1_x - dst1_x), abs(src2_x - dst2_x)) if src1_y == src2_y else 0
+            coincidence += min(abs(src1_y - dst1_y), abs(src2_y - dst2_y)) if src1_x == src2_x else 0
+            consp += coincidence * (req1[2] + req2[2])
         return consp
 
     def __judge(self, delta_E, tempreature):

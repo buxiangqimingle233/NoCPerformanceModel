@@ -13,43 +13,64 @@ class ClusterAnalysisEngine():
         self.dim_table = dim_table
 
         if not hasattr(self, "comm_graph_cache"):
-            comm_graph = self.genCommGraph(self.size)
-            self.comm_graph_cache = comm_graph
+            comm_graph, comm_graph_fgn = self.genCommGraph(self.size)
+            self.comm_graph_cache = (comm_graph, comm_graph_fgn)
         else:
-            comm_graph = self.comm_graph_cache
+            comm_graph, comm_graph_fgn = self.comm_graph_cache
         # virtual pe index to physical pe index
         begin = self.range[0]
-        ret = []
+        ret_comm_graph = []
+        ret_comm_graph_fgn = []
         for req in comm_graph:
             src = req[0] + begin if req[0] != -1 else -1
             dst = req[1] + begin if req[1] != -1 else -1
             vol = req[2]
-            ret.append((src, dst, vol))
-        return ret
+            ret_comm_graph.append((src, dst, vol))
+        for req_fgn in comm_graph_fgn:
+            src = req_fgn[0] + begin if req[0] != -1 else -1
+            dst = req_fgn[1] + begin if req[1] != -1 else -1
+            vol = req_fgn[2]
+            ret_comm_graph_fgn.append((src, dst, vol))
+        return ret_comm_graph, ret_comm_graph_fgn
 
     def genCommGraph(self, PE_num):
         # report communication requests
         # TODO: report memory access counts
         dim_list = self.dim_table.getDimList()
         comm_graph = []
+        comm_graph_fine_granularity = []
         num_of_iteration = 1
         for dim in dim_list:
             num_of_iteration *= dim.getStepCnt()
+            print(num_of_iteration)
             comm_step = dim.takeStep(PE_num)
             comm_graph += [
-                (item[0], item[1], item[2]*num_of_iteration)
+                (item[0], item[1], item[2] * num_of_iteration)
                 for item in comm_step
             ]
-        self.comm_graph = self.__postProcessing(comm_graph)
-        return self.comm_graph
+            comm_graph_fine_granularity += [
+                (item[0], item[1], (item[2], num_of_iteration))
+                for item in comm_step
+            ]
+        self.comm_graph, self.comm_graph_fine_granularity = comm_graph, comm_graph_fine_granularity
+        self.__postProcessing()
+        return self.comm_graph, self.comm_graph_fine_granularity
 
-    def __postProcessing(self, comm_graph):
+    def __postProcessing(self):
+        comm_graph, comm_graph_fine_granularity = self.comm_graph, self.comm_graph_fine_granularity
         temp_dict = {(req[0], req[1]): 0 for req in comm_graph}
-        for req in comm_graph:
+        temp_dict_fine_granularity = {key: [] for key in temp_dict}
+        for req, req_fgn in zip(comm_graph, comm_graph_fine_granularity):
             temp_dict[(req[0], req[1])] += req[2]
-        comm_graph = [(src, dst, vol) for (src, dst), vol in temp_dict.items()]
+            temp_dict_fine_granularity[(req_fgn[0], req_fgn[1])].append(req_fgn[2])
 
         # 自己传自己以及传0
+        comm_graph = [(src, dst, vol) for (src, dst), vol in temp_dict.items()]            
         comm_graph = [item for item in comm_graph if item[0] != item[1] and item[-1] != 0]
-        return comm_graph
 
+        comm_graph_fine_granularity = [(src, dst, vol) for (src, dst), vol in temp_dict_fine_granularity.items()]
+        comm_graph_fine_granularity = [item for item in comm_graph_fine_granularity if item[0] != item[1] and item[-1] != []]
+
+        self.comm_graph = comm_graph
+        self.comm_graph_fine_granularity = comm_graph_fine_granularity
+        return comm_graph, comm_graph_fine_granularity

@@ -24,14 +24,18 @@ class Driver():
         self.task_arg["G"] = task_graph
         self.__rectangle2Square()
         self.__loadClass()
-        return self.do_execution(should_print)
+        ret = self.do_execution(should_print)
+        self.__resetArch()
+        return ret
 
     def execute(self, task_graph_path, usr_config_path, arch_config_path, should_print):
         self.__loadConfigs(usr_config_path, arch_config_path)
         self.__loadTaskGraph(task_graph_path)
         self.__rectangle2Square()
         self.__loadClass()
-        return self.do_execution(should_print)
+        ret = self.do_execution(should_print)
+        self.__resetArch()
+        return ret
 
     def do_execution(self, should_print):
         sub_tasks = self.cong_manager.doInjection(self.task_arg, self.arch_arg)
@@ -118,6 +122,9 @@ class Driver():
         self.arch_arg['n'] = (d + 1)**2
         return task_graph, d, n
 
+    def __resetArch(self):
+        self.arch_arg['d'] = self.arch_arg['d'] - 1
+        self.arch_arg['n'] = self.arch_arg['d']**2
 
 if __name__ == "__main__":
     os.chdir(root)
