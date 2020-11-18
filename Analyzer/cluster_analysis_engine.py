@@ -27,8 +27,8 @@ class ClusterAnalysisEngine():
             vol = req[2]
             ret_comm_graph.append((src, dst, vol))
         for req_fgn in comm_graph_fgn:
-            src = req_fgn[0] + begin if req[0] != -1 else -1
-            dst = req_fgn[1] + begin if req[1] != -1 else -1
+            src = req_fgn[0] + begin if req_fgn[0] != -1 else -1
+            dst = req_fgn[1] + begin if req_fgn[1] != -1 else -1
             vol = req_fgn[2]
             ret_comm_graph_fgn.append((src, dst, vol))
         return ret_comm_graph, ret_comm_graph_fgn
@@ -40,9 +40,12 @@ class ClusterAnalysisEngine():
         comm_graph = []
         comm_graph_fine_granularity = []
         num_of_iteration = 1
+
+        for dim in dim_list:
+            print(dim.toString())
+
         for dim in dim_list:
             num_of_iteration *= dim.getStepCnt()
-            print(num_of_iteration)
             comm_step = dim.takeStep(PE_num)
             comm_graph += [
                 (item[0], item[1], item[2] * num_of_iteration)

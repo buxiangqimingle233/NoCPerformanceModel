@@ -42,12 +42,16 @@ class Driver():
         total_latency = 0
         for task in sub_tasks:
             # task lasting time
-            width = self.arch_arg["w"]
-            inject_latency = [req_v[2] / (req_r[2] * width) for req_v, req_r in zip(task["G_V"], task["G_R"])]
+            # width = self.arch_arg["w"] * self.arch_arg["bw"]
+            inject_latency = [req_v[2] / req_r[2] for req_v, req_r in zip(task["G_V"], task["G_R"])]
             transmission_latency = self.estimator.calLatency(task, self.arch_arg)
+            print("max packet latency: ", max(transmission_latency))
+            transmission_latency = [req_v[2] / task["l"] * trs_latency for req_v, trs_latency in zip(task["G_V"], transmission_latency)]
             latency = [i + j for i, j in zip(inject_latency, transmission_latency)]
-            inject_ratio = [i / j for i, j in zip(inject_latency, latency)]
+            # latency = transmission_latency
+            inject_ratio = [i / (j - i) for i, j in zip(inject_latency, latency)]
             if False in [i > 0 for i in transmission_latency]:
+                print(transmission_latency)
                 raise Exception("Negative transmission latency occurs!!!")
             max_idx = latency.index(max(latency))
             if should_print:
@@ -125,6 +129,7 @@ class Driver():
     def __resetArch(self):
         self.arch_arg['d'] = self.arch_arg['d'] - 1
         self.arch_arg['n'] = self.arch_arg['d']**2
+
 
 if __name__ == "__main__":
     os.chdir(root)

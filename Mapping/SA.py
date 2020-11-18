@@ -1,6 +1,6 @@
 import os
 import sys
-# import numpy as np
+import numpy as np
 from copy import deepcopy
 from random import sample, random, randint
 import argparse
@@ -10,9 +10,10 @@ import json
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(root)
 sys.path.append(root + "/Driver")
+sys.path.append(root + "/Util")
 
 from Driver.SDriver import Driver
-
+from Util.XYRouting import XYRouting
 
 class SA:
     '''Simulated Annealing Algorithm for Task Mapping Problem
@@ -37,6 +38,8 @@ class SA:
         self.arc_config_path = arch_config_path
 
         self.__readData(comm_graph_path, arch_config_path)
+        
+
         temperature = self.T
         overall_counter = 0
         self.__initLabels()
@@ -45,7 +48,7 @@ class SA:
         while temperature > self.T_min and overall_counter < self.global_epc_limit:
             for i in range(self.local_epc_limit):
                 try:
-                    new_lables, new_asgn_labels = self.__disturbance(deepcopy(self.labels), deepcopy(self.asgn_labels))
+                    new_lables, new_asgn_labels, _, _ = self.__disturbance(deepcopy(self.labels), deepcopy(self.asgn_labels))
                     new_consp = self.__consumption(new_lables)
                     delta_E = (new_consp - min_consp) / (min_consp + 1e-10) * 100
                     if self.__judge(delta_E, temperature):
@@ -74,17 +77,21 @@ class SA:
         arch_arg = self.__readArchConfig(arch_config_path)
         whole_comm_graph = self.__readCommGraph(comm_graph_path)
 
-        comm_graph_between_pe = [req for req in whole_comm_graph if req[0] != -1]
+        comm_graph_between_pe = [req for req in whole_comm_graph if req[0] != -1 and req[1] != -1]
         srcs, dsts, vols = zip(*comm_graph_between_pe)
         self.comm_graph_between_pe = {sd: vol for sd, vol in zip(zip(srcs, dsts), vols)}
-        self.nodes = list(set(srcs + dsts))
-        self.labels = {node: -1 for node in self.nodes}
-        n = arch_arg["n"]
-        self.asgn_labels = {i: -1 for i in range(n)}
 
-        comm_graph_with_mem = [req for req in whole_comm_graph if req[0] == -1]
+        comm_graph_with_mem = [req for req in whole_comm_graph if req[0] == -1 or req[1] == -1]
         msrcs, mdsts, mvols = zip(*comm_graph_with_mem)
         self.comm_graph_with_mem = {sd: vol for sd, vol in zip(zip(msrcs, mdsts), mvols)}
+
+        n = arch_arg["n"]
+
+        assert False not in [i in set(srcs + dsts) for i in range(n)]    # 保证n个是全用到的
+
+        self.nodes = list(set(srcs + dsts))
+        self.labels = {node: -1 for node in range(n)}
+        self.asgn_labels = {i: -1 for i in range(n)}
 
     def __initLabels(self):
         n = self.arch_arg["n"]
@@ -104,21 +111,19 @@ class SA:
         except KeyError:
             pass
         asgn_labels[l1], asgn_labels[l2] = asgn_labels[l2], asgn_labels[l1]     # swap assigned labels
-        return labels, asgn_labels
+        return labels, asgn_labels, l1, l2
 
     def __consumption(self, labels):
         d = self.arch_arg["d"]
-        consp = 0
         task_graph = self.__label2TaskGraph(labels)
-        # self.__writeTaskGraph(self.task_graph_path, task_graph)
-        # consp = self.estimate_driver.execute_mem(task_graph, "Configuration/baseline.json", self.arc_config_path, False)
-        for req1, req2 in zip(task_graph[:-1], task_graph[1:]):
-            src1, dst1, src2, dst2 = req1[0], req1[1], req2[0], req2[1]
-            (src1_x, src1_y), (dst1_x, dst1_y), (src2_x, src2_y), (dst2_x, dst2_y) = \
-                map(lambda x: (x // d, x % d), (src1, dst1, src2, dst2))
-            coincidence = min(abs(src1_x - dst1_x), abs(src2_x - dst2_x)) if src1_y == src2_y else 0
-            coincidence += min(abs(src1_y - dst1_y), abs(src2_y - dst2_y)) if src1_x == src2_x else 0
-            consp += coincidence * (req1[2] + req2[2])
+        router_dropin = np.zeros(((d + 1) * (d + 1), 4), dtype=np.int32)
+        rter = XYRouting(self.arch_arg)
+        path = rter.path(task_graph)
+        for req in path:
+            router_path, _, oport_path = zip(*req[:-1])
+            oport_path = [i - 2 for i in oport_path]
+            router_dropin[router_path, oport_path] += 1
+        consp = np.max(router_dropin)
         return consp
 
     def __judge(self, delta_E, tempreature):
@@ -141,12 +146,23 @@ class SA:
         ]
         d = self.arch_arg["d"]      # TODO: bank 与边长相同
         bias = self.arch_arg["n"]
-        mapped_bank = [i % d + bias for i in range(len(comm_graph_with_mem))]
-        task_graph_with_mem = [
+
+        comm_graph_with_src_mem = [req for req in comm_graph_with_mem if req[0] == -1]
+        comm_graph_with_dst_mem = [req for req in comm_graph_with_mem if req[1] == -1]
+
+        mapped_bank_src = [i % d + bias for i in range(len(comm_graph_with_src_mem))]
+        mapped_bank_dst = [i % d + bias for i in range(len(comm_graph_with_dst_mem))]
+
+        task_graph_with_src_mem = [
             (mb, L[dst], comm_graph_with_mem[(src, dst)])
-            for mb, (src, dst) in zip(mapped_bank, comm_graph_with_mem)
+            for mb, (src, dst) in zip(mapped_bank_src, comm_graph_with_src_mem)
         ]
-        task_graph = task_graph_between_pe + task_graph_with_mem
+
+        task_graph_with_dst_mem = [
+            (L[src], mb, comm_graph_with_mem[(src, dst)])
+            for mb, (src, dst) in zip(mapped_bank_dst, comm_graph_with_dst_mem)
+        ]
+        task_graph = task_graph_between_pe + task_graph_with_src_mem + task_graph_with_dst_mem
         return task_graph
 
     def __readCommGraph(self, comm_graph_path):

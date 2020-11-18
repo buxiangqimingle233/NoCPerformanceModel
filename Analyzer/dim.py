@@ -11,6 +11,9 @@ class Dim():
             = name, size, map_size, map_ofs, dis_size, dis_ofs
         self.related_dims = []
 
+    def toString(self):
+        return "{} {} {} {} {} {}".format(self.name, self.size, self.map_size, self.map_ofs, self.dis_size, self.dis_ofs)
+
     def takeStep(self, PENum):
         '''Analyze transmission due to the move of this dimension
                 Return:
@@ -23,11 +26,9 @@ class Dim():
                 .format(self.name, self.map_size, self.map_ofs, self.dis_size, self.dis_ofs))
         if self.size < 0:
             raise Exception("Please set all the attributes before calling function 'takeStep'")
-
-        if all([dim.getDisOfs() == 0 for dim in self.related_dims]) and self.dis_ofs == 0:       # 全都是 TM 就可以broadcast了
+        if all([dim.getDisOfs() == 0 for dim in self.related_dims]) and self.dis_ofs == 0 and not self.isOutDim():       # 全都是 TM 就可以broadcast了
             self.comm_graph = self.recursiveDoubling(list(range(PENum)), -1, self.map_ofs)
-
-        else:  
+        else:
             # FIXME: 写优美点！
             # TODO: 记录PE map的index range
             map_size, map_ofs, dis_size, dis_ofs = self.map_size, self.map_ofs, self.dis_size, self.dis_ofs
@@ -37,28 +38,31 @@ class Dim():
                 end_pres = begin_pres + dis_size
                 begin_prev, end_prev = begin_pres - map_ofs, end_pres - map_ofs
 
-                if begin_pres >= map_size:
-                    self.addRequest(-1, idx, dis_size)
-                elif end_pres > map_size:
-                    vol_from_mem = end_pres - map_size
-                    vol_from_pe = map_size - begin_pres
-                    if begin_pres < end_prev:
-                        vol_from_pe -= end_prev - begin_pres
-                    self.addRequest(-1, idx, vol_from_mem)
-                    self.addRequest(len(idxs) - 1, idx, vol_from_pe)
+                if self.isOutDim():
+                    self.addRequest(idx, -1, dis_size)
                 else:
-                    # 均来自于PE
-                    PE1 = begin_pres // dis_ofs
-                    if begin_pres % dis_ofs == 0:
-                        # 只有一个PE
-                        self.addRequest(PE1, idx, dis_size)
+                    if begin_pres >= map_size:
+                        self.addRequest(-1, idx, dis_size)
+                    elif end_pres > map_size:
+                        vol_from_mem = end_pres - map_size
+                        vol_from_pe = map_size - begin_pres
+                        if begin_pres < end_prev:
+                            vol_from_pe -= end_prev - begin_pres
+                        self.addRequest(-1, idx, vol_from_mem)
+                        self.addRequest(len(idxs) - 1, idx, vol_from_pe)
                     else:
-                        # 有两个PE
-                        PE2 = PE1 + 1
-                        vol_from_pe2 = end_pres - (map_size + dis_ofs * PE1)
-                        vol_from_pe1 = map_size - vol_from_pe2
-                        self.addRequest(PE1, idx, vol_from_pe1)
-                        self.addRequest(PE2, idx, vol_from_pe2)
+                        # 均来自于PE
+                        PE1 = begin_pres // dis_ofs
+                        if begin_pres % dis_ofs == 0:
+                            # 只有一个PE
+                            self.addRequest(PE1, idx, dis_size)
+                        else:
+                            # 有两个PE
+                            PE2 = PE1 + 1
+                            vol_from_pe2 = end_pres - (map_size + dis_ofs * PE1)
+                            vol_from_pe1 = map_size - vol_from_pe2
+                            self.addRequest(PE1, idx, vol_from_pe1)
+                            self.addRequest(PE2, idx, vol_from_pe2)
 
         for req in self.comm_graph:
             for dim in self.related_dims:
@@ -100,6 +104,9 @@ class Dim():
         self.comm_graph = [item for item in self.comm_graph if item[0] != item[1] and item[-1] != 0] 
 
         return self.comm_graph
+
+    def isOutDim(self):
+        return self.getName() == "X\'" or self.getName() == "Y\'" or self.getName() == "C\'"
 
     def addRequest(self, src, dst, volume):
         if hasattr(self, 'comm_graph'):

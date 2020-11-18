@@ -43,7 +43,7 @@ class PEstimator(VirEstimator):
         # Default configuration for tasks
         self.dft_task = {}
         self.dft_task["G_R"] = []        # task graph: (src, dst, rate)
-        self.dft_task["cv_A"] = 1.00     # average coefficiency of packet size
+        self.dft_task["cv_A"] = 5.00     # average coefficiency of packet size
         self.dft_task["l"] = 64          # average packet size (flits)
         self.task_arg = copy.deepcopy(self.dft_task)
 
@@ -119,7 +119,7 @@ class PEstimator(VirEstimator):
 
         # Set up P_s2d
         G = self.task_arg["G_R"]
-        G = [(r[0], r[1], r[2] / self.task_arg["l"]) for r in G]      # flit/cycle -> packet/cycle
+        G = [(r[0], r[1], r[2] / self.task_arg["l"]) for r in G]      # bit/cycle -> packet/cycle
 
         # TODO: a single request for a (source, destination) pair only
         assert max(Counter([(r[0], r[1]) for r in G]).values()) <= 1

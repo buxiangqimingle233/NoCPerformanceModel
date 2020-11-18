@@ -3,9 +3,8 @@ import numpy as np
 from VirCongManager import VirCongManager
 from Util import XYRouting as RS
 
-
 class WUCongManager(VirCongManager):
-    scale = 1
+    scale = 10
 
     def __init__(self):
         print("Log: Employed Weighted-Uniform-Congestion-Manager.")
@@ -15,13 +14,15 @@ class WUCongManager(VirCongManager):
         self.__setTaskArch(task_arg, arch_arg)
         self.__forwardPropagation()
         self.__backwardPropagation()
-
         ret = [{
             "G_V": task_arg["G"],
             "G_R": [(key[0], key[1], val * self.scale) for key, val in self.cache["G_R"].items()],
             "l": task_arg["l"],
             "cv_A": task_arg["cv_A"]
         }]          # we have only one graph now
+        test = [i[-1] for i in ret[0]["G_R"]]
+        print("max injection rate(bits/cycle)", max(test))  #, "details: ", ret[0]["G_R"][index(test(max(test)))])
+        # assert max(test) < 1
         return ret
 
     def __setTaskArch(self, task_arg, arch_arg):
@@ -55,7 +56,7 @@ class WUCongManager(VirCongManager):
             for ch in list(channels[0]):
                 ratio = remain[ch] / (len(rvs_ptr[ch]) + 1e-10)
                 for sd in rvs_ptr[ch]:
-                    G_R[sd] = ratio
+                    G_R[sd] = ratio * self.arch_arg["w"] * self.arch_arg["bw"]
                     passingby = [self.rter.rc2c(r, oc) for r, ic, oc in packed_path[sd][: -1]]
                     remain[passingby] -= ratio
                     for c in passingby:
